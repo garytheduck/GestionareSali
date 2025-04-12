@@ -1,0 +1,122 @@
+```
+@startuml Class Diagram - Gestionare Săli
+
+' Stilizare
+skinparam classAttributeIconSize 0
+skinparam classFontStyle bold
+skinparam classFontSize 14
+skinparam classBackgroundColor #f0f8ff
+skinparam classBorderColor #2c3e50
+
+' Enumerări
+enum UserRole {
+  STUDENT
+  SECRETARY
+  ADMIN
+}
+
+enum DayOfWeek {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
+enum ReservationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+' Clase principale
+class User {
+  +id: Integer
+  +email: String
+  +password_hash: String
+  +first_name: String
+  +last_name: String
+  +role: UserRole
+  +is_active: Boolean
+  +created_at: DateTime
+  +updated_at: DateTime
+  --
+  +full_name(): String
+  +check_password(password): Boolean
+  +set_password(password): void
+}
+
+class Room {
+  +id: Integer
+  +name: String
+  +capacity: Integer
+  +building: String
+  +floor: Integer
+  +room_type: String
+  +description: String
+  +usv_id: Integer
+  +is_active: Boolean
+  --
+  +get_availability(date, start_time, end_time): Boolean
+}
+
+class Schedule {
+  +id: Integer
+  +room_id: Integer
+  +day_of_week: DayOfWeek
+  +start_time: Time
+  +end_time: Time
+  +subject: String
+  +professor: String
+  +group_name: String
+  +semester: String
+  +is_active: Boolean
+  --
+  +is_overlapping(other_schedule): Boolean
+}
+
+class Reservation {
+  +id: Integer
+  +reference_number: String
+  +user_id: Integer
+  +room_id: Integer
+  +date: Date
+  +start_time: Time
+  +end_time: Time
+  +purpose: String
+  +status: ReservationStatus
+  +rejection_reason: String
+  +created_at: DateTime
+  +updated_at: DateTime
+  --
+  +is_available(): Boolean
+  +approve(): void
+  +reject(reason): void
+}
+
+class InstitutionSettings {
+  +id: Integer
+  +name: String
+  +address: String
+  +current_semester: String
+  +working_hours_start: Time
+  +working_hours_end: Time
+  +daily_report_time: Time
+  +logo: Binary
+  +updated_at: DateTime
+  --
+  +get_settings(): InstitutionSettings
+}
+
+' Relații
+User "1" -- "many" Reservation : creates >
+Room "1" -- "many" Schedule : has >
+Room "1" -- "many" Reservation : reserved for >
+UserRole -- User : has >
+DayOfWeek -- Schedule : occurs on >
+ReservationStatus -- Reservation : has >
+
+@enduml
+```

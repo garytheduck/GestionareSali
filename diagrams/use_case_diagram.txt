@@ -1,0 +1,89 @@
+```
+@startuml Use Case Diagram - Gestionare Săli
+
+' Stilizare
+skinparam actorStyle awesome
+skinparam usecaseBackgroundColor #f0f8ff
+skinparam usecaseBorderColor #2c3e50
+skinparam actorBackgroundColor #ffe6cc
+
+' Actori
+actor "Student" as student
+actor "Secretariat" as secretary
+actor "Administrator" as admin
+actor "Sistem USV" as usvSystem
+
+' Cazuri de utilizare pentru Student
+rectangle "Sistem de Gestionare Săli" {
+  ' Cazuri de utilizare comune
+  usecase "Autentificare" as login
+  usecase "Vizualizare profil" as viewProfile
+  usecase "Schimbare parolă" as changePassword
+  
+  ' Cazuri de utilizare pentru Student
+  usecase "Vizualizare săli disponibile" as viewRooms
+  usecase "Verificare disponibilitate sală" as checkAvailability
+  usecase "Creare cerere de rezervare" as createReservation
+  usecase "Vizualizare rezervări proprii" as viewOwnReservations
+  usecase "Anulare rezervare" as cancelReservation
+  
+  ' Cazuri de utilizare pentru Secretariat
+  usecase "Vizualizare toate rezervările" as viewAllReservations
+  usecase "Aprobare/Respingere rezervări" as approveReservations
+  usecase "Gestionare săli" as manageRooms
+  usecase "Generare rapoarte" as generateReports
+  usecase "Vizualizare orar săli" as viewSchedule
+  
+  ' Cazuri de utilizare pentru Administrator
+  usecase "Gestionare utilizatori" as manageUsers
+  usecase "Configurare setări instituționale" as manageSettings
+  usecase "Import orar din Excel" as importScheduleExcel
+  usecase "Import orar din API USV" as importScheduleAPI
+  usecase "Backup bază de date" as backupDatabase
+  
+  ' Relații pentru Student
+  student --> login
+  student --> viewProfile
+  student --> changePassword
+  student --> viewRooms
+  student --> checkAvailability
+  student --> createReservation
+  student --> viewOwnReservations
+  student --> cancelReservation
+  
+  ' Relații pentru Secretariat
+  secretary --> login
+  secretary --> viewProfile
+  secretary --> changePassword
+  secretary --> viewAllReservations
+  secretary --> approveReservations
+  secretary --> manageRooms
+  secretary --> generateReports
+  secretary --> viewSchedule
+  
+  ' Relații pentru Administrator
+  admin --> login
+  admin --> viewProfile
+  admin --> changePassword
+  admin --> manageUsers
+  admin --> manageSettings
+  admin --> importScheduleExcel
+  admin --> importScheduleAPI
+  admin --> backupDatabase
+  admin --> viewAllReservations
+  admin --> approveReservations
+  admin --> manageRooms
+  admin --> generateReports
+  
+  ' Relații pentru Sistem USV
+  usvSystem --> importScheduleAPI
+  
+  ' Relații de includere și extindere
+  login <.. viewProfile : <<include>>
+  checkAvailability <.. createReservation : <<include>>
+  viewAllReservations <.. approveReservations : <<include>>
+  viewSchedule <.. checkAvailability : <<include>>
+}
+
+@enduml
+```

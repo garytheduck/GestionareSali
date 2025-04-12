@@ -1,0 +1,78 @@
+```
+@startuml State Diagram - Gestionare Săli
+
+' Stilizare
+skinparam stateBorderColor #2c3e50
+skinparam stateBackgroundColor #f0f8ff
+skinparam stateArrowColor #2c3e50
+skinparam stateFontStyle bold
+
+' Diagrama de stări pentru o rezervare
+title Diagrama de stări pentru procesul de rezervare a unei săli
+
+[*] --> Inițiată : Student creează rezervare
+
+state Inițiată {
+  state "Verificare disponibilitate" as Verificare
+  state "Completare formular" as Formular
+  
+  [*] --> Verificare
+  Verificare --> Formular : Sală disponibilă
+  Verificare --> [*] : Sală indisponibilă
+  Formular --> [*] : Trimitere cerere
+}
+
+Inițiată --> Înregistrată : Salvare în sistem
+
+state Înregistrată {
+  state "Validare automată" as Validare
+  
+  [*] --> Validare
+  Validare --> [*] : Date valide
+  Validare --> Înregistrată : Date invalide\nNotificare student
+}
+
+Înregistrată --> ÎnAșteptare : Notificare secretariat
+
+state ÎnAșteptare {
+  state "Examinare de către secretariat" as Examinare
+  
+  [*] --> Examinare
+  Examinare --> [*]
+}
+
+ÎnAșteptare --> Aprobată : Secretar aprobă
+ÎnAșteptare --> Respinsă : Secretar respinge\ncu motiv
+
+state Aprobată {
+  state "Notificare student" as NotificareA
+  state "Actualizare disponibilitate sală" as Actualizare
+  
+  [*] --> NotificareA
+  NotificareA --> Actualizare
+  Actualizare --> [*]
+}
+
+state Respinsă {
+  state "Notificare student" as NotificareR
+  
+  [*] --> NotificareR
+  NotificareR --> [*]
+}
+
+Aprobată --> Finalizată : Data rezervării a trecut
+Respinsă --> [*]
+
+state Finalizată {
+  state "Arhivare" as Arhivare
+  state "Includere în rapoarte" as Rapoarte
+  
+  [*] --> Arhivare
+  Arhivare --> Rapoarte
+  Rapoarte --> [*]
+}
+
+Finalizată --> [*]
+
+@enduml
+```

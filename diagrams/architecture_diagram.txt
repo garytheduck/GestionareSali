@@ -1,0 +1,67 @@
+@startuml
+
+title "Architecture Diagram - Gestionare Săli"
+
+package "Frontend Container" {
+  [React Application] as react
+  [Components] as components
+  [Redux Store] as redux
+  [API Client] as apiClient
+  [Auth Module] as authModule
+  
+  components --> redux : updates
+  redux --> components : provides state
+  components --> apiClient : requests
+  apiClient --> authModule : auth tokens
+}
+
+package "Backend Container" {
+  [Flask Application] as flask
+  [Routes/Controllers] as routes
+  [Services] as services
+  [Models] as models
+  [Utils] as utils
+  [Schedule Importer] as scheduleImporter
+  [USV API Client] as usvApiClient
+  [Email Service] as emailService
+  [Report Generator] as reportGenerator
+  [Availability Checker] as availabilityChecker
+  
+  routes --> services : uses
+  services --> models : manipulates
+  services --> utils : uses
+  utils --> scheduleImporter
+  utils --> usvApiClient
+  utils --> emailService
+  utils --> reportGenerator
+  utils --> availabilityChecker
+}
+
+database "Database Container" {
+  [PostgreSQL] as postgres
+  [users]
+  [rooms]
+  [schedules]
+  [reservations]
+  [settings]
+  
+  postgres --> users
+  postgres --> rooms
+  postgres --> schedules
+  postgres --> reservations
+  postgres --> settings
+}
+
+cloud "USV API" as usvApi
+
+' Relații între containere
+react --> flask : HTTP/JSON API
+flask --> postgres : SQL via SQLAlchemy
+usvApiClient --> usvApi : HTTP Requests
+
+' Relații între componente specifice
+apiClient ..> routes : REST API calls
+models ..> users : ORM Mapping
+scheduleImporter ..> usvApiClient : uses
+
+@enduml

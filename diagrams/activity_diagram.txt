@@ -1,0 +1,82 @@
+```
+@startuml Activity Diagram - Gestionare Săli
+
+' Stilizare
+skinparam activityBackgroundColor #f0f8ff
+skinparam activityBorderColor #2c3e50
+skinparam activityDiamondBackgroundColor #ffe6cc
+skinparam activityDiamondBorderColor #2c3e50
+skinparam activityStartColor #4CAF50
+skinparam activityEndColor #F44336
+
+' Diagrama de activități pentru procesul de rezervare a unei săli
+title Diagrama de activități pentru procesul de rezervare a unei săli
+
+|Student|
+start
+:Autentificare în sistem;
+:Accesare pagină rezervări;
+:Selectare dată și interval orar;
+:Verificare disponibilitate săli;
+
+|Sistem|
+if (Există săli disponibile?) then (da)
+  :Afișare săli disponibile;
+  
+  |Student|
+  :Selectare sală;
+  :Completare formular rezervare;
+  :Trimitere cerere;
+  
+  |Sistem|
+  :Validare date cerere;
+  if (Date valide?) then (da)
+    :Salvare cerere în baza de date;
+    :Generare număr de referință;
+    :Notificare secretariat;
+    
+    |Secretariat|
+    :Primire notificare;
+    :Verificare detalii rezervare;
+    if (Rezervare aprobată?) then (da)
+      :Aprobare rezervare;
+      
+      |Sistem|
+      :Actualizare status rezervare;
+      :Notificare student aprobare;
+      
+      |Student|
+      :Primire confirmare rezervare;
+      
+    else (nu)
+      |Secretariat|
+      :Completare motiv respingere;
+      :Respingere rezervare;
+      
+      |Sistem|
+      :Actualizare status rezervare;
+      :Notificare student respingere;
+      
+      |Student|
+      :Primire notificare respingere;
+    endif
+    
+  else (nu)
+    :Afișare erori validare;
+    
+    |Student|
+    :Corectare date;
+  endif
+  
+else (nu)
+  :Afișare mesaj indisponibilitate;
+  
+  |Student|
+  :Selectare altă dată/interval;
+endif
+
+|Student|
+stop
+
+@enduml
+```
