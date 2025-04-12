@@ -10,7 +10,7 @@ Acest proiect reprezintă partea de backend pentru o aplicație de gestionare a 
 
 - Python 3.9+
 - Flask (framework web)
-- PostgreSQL (bază de date)
+- PostgreSQL 14 (bază de date)
 - Docker & Docker Compose (containerizare)
 - JWT pentru autentificare
 - SQLAlchemy ORM
@@ -110,6 +110,48 @@ Sistemul poate genera rapoarte detaliate în format Excel despre:
 ### Import orar din Excel
 
 Pe lângă integrarea cu API-ul USV, sistemul permite și importul manual al orarelor din fișiere Excel sau CSV, oferind flexibilitate în gestionarea datelor.
+
+## Configurarea bazei de date
+
+Aplicația folosește PostgreSQL ca sistem de gestiune a bazei de date. Configurarea este realizată automat prin Docker Compose.
+
+### Detalii configurare PostgreSQL
+
+- **Versiune**: PostgreSQL 14
+- **Nume bază de date**: `exam_scheduling`
+- **Utilizator**: `postgres`
+- **Parolă**: `postgres`
+- **Port**: `5432`
+- **Persistență date**: Volumul Docker `postgres_data`
+
+### Modele de date principale
+
+Baza de date include următoarele modele principale:
+
+- **User**: Gestionează utilizatorii sistemului (studenți, secretariat, administratori)
+- **Room**: Informații despre sălile disponibile (nume, capacitate, clădire, etaj)
+- **Schedule**: Orarul săptămânal al sălilor (zi, interval orar, materie, profesor)
+- **Reservation**: Cererile de rezervare a sălilor (utilizator, sală, dată, interval orar, scop)
+- **Settings**: Setări instituționale (nume, adresă, semestru curent)
+
+### Inițializare bază de date
+
+La prima rulare, baza de date este inițializată automat cu date implicite:
+
+- Un utilizator administrator (`admin@example.com` / `admin123`)
+- Setări instituționale de bază
+
+Pentru a inițializa manual baza de date, rulați:
+
+```
+python init_db.py
+```
+
+### Configurare în medii diferite
+
+- **Development**: SQLite local sau PostgreSQL configurat prin variabila de mediu `DATABASE_URL`
+- **Testing**: SQLite în memorie pentru teste
+- **Production**: PostgreSQL configurat în docker-compose.yml
 
 ## Dezvoltare
 
