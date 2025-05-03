@@ -1,11 +1,13 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, redirect, url_for, session
 from flask_jwt_extended import (
     create_access_token, create_refresh_token, 
     jwt_required, get_jwt_identity
 )
 from app.models.user import User, UserRole
 from app import db
+from app.utils.google_auth import create_flow, get_google_user_info, get_or_create_user
 import datetime
+import os
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -13,6 +15,31 @@ auth_bp = Blueprint('auth', __name__)
 def login():
     data = request.get_json()
     
+    # Check if this is a Google login
+    if data and data.get('googleToken'):
+        # Process Google token
+        user_info = get_google_user_info(data.get('googleToken'))
+        
+        if not user_info:
+            return jsonify({'message': 'Token Google invalid'}), 401
+        
+        # Get or create user from Google info
+        user = get_or_create_user(user_info)
+        
+        if not user.is_active:
+            return jsonify({'message': 'Contul este dezactivat. Contactați administratorul.'}), 403
+        
+        access_token = create_access_token(identity=user.id)
+        refresh_token = create_refresh_token(identity=user.id)
+        
+        return jsonify({
+            'message': 'Autentificare Google reușită',
+            'access_token': access_token,
+            'refresh_token': refresh_token,
+            'user': user.to_dict()
+        }), 200
+    
+    # Regular email/password login
     if not data or not data.get('email') or not data.get('password'):
         return jsonify({'message': 'Email și parola sunt obligatorii'}), 400
     
@@ -129,3 +156,57 @@ def change_password():
     return jsonify({
         'message': 'Parola a fost schimbată cu succes'
     }), 200
+
+@auth_bp.route('/google-login', methods=['GET'])
+def google_login():
+    """Initiate Google OAuth flow"""
+    # Create the flow using the create_flow helper
+    flow = create_flow()
+    
+    # Generate the authorization URL
+    authorization_url, state = flow.authorization_url(
+        access_type='offline',
+        include_granted_scopes='true',
+        prompt='consent'
+    )
+    
+    # Store the state in the session
+    session['state'] = state
+    
+    # Redirect to Google's OAuth page
+    return redirect(authorization_url)
+
+@auth_bp.route('/callback', methods=['GET'])
+def callback():
+    """Handle Google OAuth callback"""
+    # Get the state from the session
+    state = session.get('state')
+    
+    # Create the flow using the create_flow helper
+    flow = create_flow()
+    
+    # Use the authorization server's response to fetch the OAuth 2.0 tokens
+    flow.fetch_token(authorization_response=request.url)
+    
+    # Get user info from the ID token
+    credentials = flow.credentials
+    user_info = get_google_user_info(credentials.id_token)
+    
+    if not user_info:
+        return jsonify({'message': 'Autentificare Google eșuată'}), 401
+    
+    # Get or create user
+    user = get_or_create_user(user_info)
+    
+    if not user.is_active:
+        return jsonify({'message': 'Contul este dezactivat. Contactați administratorul.'}), 403
+    
+    # Create tokens
+    access_token = create_access_token(identity=user.id)
+    refresh_token = create_refresh_token(identity=user.id)
+    
+    # Redirect to frontend with tokens
+    frontend_url = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
+    redirect_url = f"{frontend_url}/auth-callback?access_token={access_token}&refresh_token={refresh_token}"
+    
+    return redirect(redirect_url)

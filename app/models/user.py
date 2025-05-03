@@ -24,6 +24,11 @@ class User(db.Model):
     # Additional fields based on role
     academic_title = db.Column(db.String(100), nullable=True)  # For professors/secretaries
     
+    # Google authentication fields
+    google_id = db.Column(db.String(255), nullable=True, unique=True)
+    profile_picture = db.Column(db.String(255), nullable=True)
+    auth_provider = db.Column(db.String(50), default='local')  # 'local' or 'google'
+    
     # Relationships
     reservations = db.relationship('Reservation', foreign_keys='Reservation.user_id', backref='user', lazy='dynamic')
     
@@ -59,6 +64,8 @@ class User(db.Model):
             'academic_title': self.academic_title,
             'is_active': self.is_active,
             'created_at': self.created_at.isoformat() if self.created_at else None,
+            'profile_picture': self.profile_picture,
+            'auth_provider': self.auth_provider
         }
     
     def __repr__(self):
