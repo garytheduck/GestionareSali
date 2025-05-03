@@ -61,6 +61,13 @@ def get_or_create_user(user_info):
     email = user_info['email']
     google_id = user_info.get('google_id')
     
+    # Check if email domain is allowed (student.usv.ro or usm.ro)
+    email_domain = email.split('@')[-1].lower()
+    if email_domain not in ['student.usv.ro', 'usm.ro']:
+        # Return None for unauthorized domains
+        current_app.logger.warning(f"Unauthorized email domain: {email_domain}")
+        return None
+    
     # First try to find user by Google ID if available
     user = None
     if google_id:
@@ -83,11 +90,14 @@ def get_or_create_user(user_info):
         return user
     
     # Determine role based on email domain
-    if '@student.' in email:
-        role = UserRole.STUDENT
+    if email_domain == 'student.usv.ro':
+        role = UserRole.STUDENT  # Student role for student.usv.ro emails
+    elif email_domain == 'usm.ro':
+        role = UserRole.SECRETARY  # Secretary/Teacher role for usm.ro emails
     else:
-        # Default to student for other emails
-        role = UserRole.STUDENT
+        # This shouldn't happen due to the domain check above
+        current_app.logger.error(f"Unexpected email domain passed validation: {email_domain}")
+        return None
     
     # Create new user
     new_user = User(

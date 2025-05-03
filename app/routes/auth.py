@@ -23,8 +23,20 @@ def login():
         if not user_info:
             return jsonify({'message': 'Token Google invalid'}), 401
         
+        # Extract email domain for error message
+        email = user_info.get('email', '')
+        email_domain = email.split('@')[-1].lower() if '@' in email else ''
+        
         # Get or create user from Google info
         user = get_or_create_user(user_info)
+        
+        # Check if user was created (will be None if domain not allowed)
+        if not user:
+            return jsonify({
+                'message': 'Autentificare eșuată. Doar adresele de email de la domeniile student.usv.ro și usm.ro sunt acceptate.',
+                'error': 'unauthorized_domain',
+                'domain': email_domain
+            }), 403
         
         if not user.is_active:
             return jsonify({'message': 'Contul este dezactivat. Contactați administratorul.'}), 403
