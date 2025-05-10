@@ -6,6 +6,7 @@ from flask_cors import CORS
 from flask_mail import Mail
 import os
 from app.config import config_by_name
+from app.utils.cors_middleware import setup_cors_middleware
 
 db = SQLAlchemy()
 migrate = Migrate()
@@ -20,7 +21,20 @@ def create_app(config_name='development'):
     db.init_app(app)
     migrate.init_app(app, db)
     jwt.init_app(app)
-    CORS(app)
+    
+    # Configurăm CORS în două moduri pentru a asigura compatibilitatea
+    # 1. Folosim extensia flask_cors
+    CORS(app, resources={
+        r"/*": {
+            "origins": "*",
+            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Authorization"]
+        }
+    })
+    
+    # 2. Configurăm middleware-ul nostru personalizat pentru CORS
+    setup_cors_middleware(app)
+    
     mail.init_app(app)
     
     # Register blueprints
@@ -28,11 +42,13 @@ def create_app(config_name='development'):
     from app.routes.student import student_bp
     from app.routes.secretary import secretary_bp
     from app.routes.admin import admin_bp
+    from app.routes.teacher import teacher_bp
     
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(student_bp, url_prefix='/api/student')
     app.register_blueprint(secretary_bp, url_prefix='/api/secretary')
     app.register_blueprint(admin_bp, url_prefix='/api/admin')
+    app.register_blueprint(teacher_bp, url_prefix='/api/teacher')
     
     # Add root route for API documentation or welcome page
     @app.route('/')
