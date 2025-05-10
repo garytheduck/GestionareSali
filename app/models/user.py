@@ -7,6 +7,7 @@ class UserRole(enum.Enum):
     STUDENT = 'student'
     SECRETARY = 'secretary'
     ADMIN = 'admin'
+    TEACHER = 'teacher'  # Adăugăm rolul explicit pentru profesori
 
 class User(db.Model):
     __tablename__ = 'users'
@@ -32,12 +33,16 @@ class User(db.Model):
     # Relationships
     reservations = db.relationship('Reservation', foreign_keys='Reservation.user_id', backref='user', lazy='dynamic')
     
-    def __init__(self, email, first_name, last_name, role, password=None, academic_title=None):
+    def __init__(self, email, first_name, last_name, role, password=None, academic_title=None, 
+                 google_id=None, profile_picture=None, auth_provider='local'):
         self.email = email
         self.first_name = first_name
         self.last_name = last_name
         self.role = role
         self.academic_title = academic_title
+        self.google_id = google_id
+        self.profile_picture = profile_picture
+        self.auth_provider = auth_provider
         if password:
             self.set_password(password)
     
