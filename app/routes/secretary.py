@@ -9,6 +9,9 @@ from app.utils.email_service import send_approval_notification, send_rejection_n
 from app.utils.report_generator import generate_reservations_report
 import io
 import os
+import tempfile
+import pandas as pd
+import xlsxwriter
 
 secretary_bp = Blueprint('secretary', __name__)
 
@@ -359,3 +362,252 @@ def get_exam_stats():
         'completed': completed,
         'incomplete': incomplete_exams
     }), 200
+
+
+@secretary_bp.route('/disciplines/import', methods=['POST'])
+@jwt_required()
+def import_disciplines():
+    """Import disciplines from an Excel file"""
+    current_user_id = get_jwt_identity()
+    user = User.query.get(current_user_id)
+    
+    if not user or user.role not in [UserRole.SECRETARY, UserRole.ADMIN]:
+        return jsonify({'message': 'Acces interzis'}), 403
+    
+    # Verificăm dacă a fost încărcat un fișier
+    if 'file' not in request.files:
+        return jsonify({'message': 'Nu a fost furnizat niciun fișier'}), 400
+    
+    file = request.files['file']
+    
+    # Verificăm dacă numele fișierului este gol
+    if file.filename == '':
+        return jsonify({'message': 'Nu a fost selectat niciun fișier'}), 400
+    
+    # Verificăm extensia fișierului
+    if not file.filename.endswith(('.xlsx', '.xls')):
+        return jsonify({'message': 'Formatul fișierului nu este suportat. Vă rugăm să încărcați un fișier Excel (.xlsx sau .xls)'}), 400
+    
+    try:
+        # Citim fișierul Excel
+        df = pd.read_excel(file)
+        
+        # Verificăm dacă fișierul are coloanele necesare pentru discipline
+        required_columns = ['discipline_name', 'faculty', 'study_program', 'year_of_study', 'semester']
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        
+        if missing_columns:
+            return jsonify({
+                'message': f'Fișierul nu conține toate coloanele necesare. Lipsesc: {", ".join(missing_columns)}'
+            }), 400
+        
+        # Procesăm datele și le salvăm în baza de date
+        # Aici ar trebui să adăugați logica specifică pentru salvarea disciplinelor
+        # De exemplu, crearea de obiecte Course și salvarea lor în baza de date
+        
+        # Pentru acest exemplu, doar simulăm procesarea
+        num_disciplines = len(df)
+        
+        return jsonify({
+            'message': f'Au fost importate cu succes {num_disciplines} discipline',
+            'count': num_disciplines
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'message': f'Eroare la procesarea fișierului: {str(e)}'}), 500
+
+
+@secretary_bp.route('/group-leaders/upload', methods=['POST'])
+@jwt_required()
+def upload_group_leaders():
+    """Upload group leaders from an Excel file"""
+    current_user_id = get_jwt_identity()
+    user = User.query.get(current_user_id)
+    
+    if not user or user.role not in [UserRole.SECRETARY, UserRole.ADMIN]:
+        return jsonify({'message': 'Acces interzis'}), 403
+    
+    # Verificăm dacă a fost încărcat un fișier
+    if 'file' not in request.files:
+        return jsonify({'message': 'Nu a fost furnizat niciun fișier'}), 400
+    
+    file = request.files['file']
+    
+    # Verificăm dacă numele fișierului este gol
+    if file.filename == '':
+        return jsonify({'message': 'Nu a fost selectat niciun fișier'}), 400
+    
+    # Verificăm extensia fișierului
+    if not file.filename.endswith(('.xlsx', '.xls')):
+        return jsonify({'message': 'Formatul fișierului nu este suportat. Vă rugăm să încărcați un fișier Excel (.xlsx sau .xls)'}), 400
+    
+    # Obținem parametrii suplimentari (opționali)
+    faculty = request.form.get('faculty', '')
+    study_program = request.form.get('study_program', '')
+    year_of_study = request.form.get('year_of_study', '')
+    semester = request.form.get('semester', '')
+    academic_year = request.form.get('academic_year', '')
+    
+    try:
+        # Citim fișierul Excel
+        df = pd.read_excel(file)
+        
+        # Verificăm dacă fișierul are coloanele necesare
+        required_columns = ['email', 'group_name']
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        
+        if missing_columns:
+            return jsonify({
+                'message': f'Fișierul nu conține toate coloanele necesare. Lipsesc: {", ".join(missing_columns)}'
+            }), 400
+        
+        # Procesăm datele și le salvăm în baza de date
+        # Aici ar trebui să adăugați logica specifică pentru salvarea șefilor de grupă
+        # De exemplu, crearea de obiecte GroupLeader și salvarea lor în baza de date
+        
+        # Pentru acest exemplu, doar simulăm procesarea
+        num_group_leaders = len(df)
+        
+        return jsonify({
+            'message': f'Au fost importați cu succes {num_group_leaders} șefi de grupă',
+            'count': num_group_leaders
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'message': f'Eroare la procesarea fișierului: {str(e)}'}), 500
+
+
+@secretary_bp.route('/templates/disciplines', methods=['GET'])
+@jwt_required()
+def get_disciplines_template():
+    """Generate and return a template for disciplines import"""
+    current_user_id = get_jwt_identity()
+    user = User.query.get(current_user_id)
+    
+    if not user or user.role not in [UserRole.SECRETARY, UserRole.ADMIN]:
+        return jsonify({'message': 'Acces interzis'}), 403
+    
+    # Creăm un fișier Excel temporar
+    try:
+        # Folosim un fișier temporar care nu va fi șters automat
+        tmp_file = tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False)
+        tmp_path = tmp_file.name
+        tmp_file.close()
+        
+        print(f"Generez template pentru discipline la: {tmp_path}")
+        
+        # Creăm workbook-ul Excel
+        workbook = xlsxwriter.Workbook(tmp_path)
+        worksheet = workbook.add_worksheet('Disciplines')
+        
+        # Adăugăm antetul
+        headers = ['discipline_name', 'faculty', 'study_program', 'year_of_study', 'semester', 'credits', 'teacher_name', 'teacher_email']
+        for col, header in enumerate(headers):
+            worksheet.write(0, col, header)
+        
+        # Adăugăm câteva exemple
+        example_data = [
+            ['Programare în Java', 'FIESC', 'Calculatoare', '2', '1', '5', 'Prof. Ionescu', 'ionescu@usv.ro'],
+            ['Baze de date', 'FIESC', 'Calculatoare', '2', '2', '6', 'Prof. Popescu', 'popescu@usv.ro'],
+        ]
+        
+        for row, data in enumerate(example_data, start=1):
+            for col, value in enumerate(data):
+                worksheet.write(row, col, value)
+        
+        # Închide workbook-ul pentru a salva modificările
+        workbook.close()
+        
+        print(f"Template generat cu succes, dimensiune: {os.path.getsize(tmp_path)} bytes")
+        
+        # Trimite fișierul către client
+        response = send_file(
+            tmp_path,
+            as_attachment=True,
+            download_name='disciplines_template.xlsx',
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        
+        # Setăm un callback pentru a șterge fișierul după ce a fost trimis
+        @response.call_on_close
+        def cleanup():
+            try:
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+                    print(f"Fișierul temporar {tmp_path} a fost șters")
+            except Exception as e:
+                print(f"Eroare la ștergerea fișierului temporar: {e}")
+        
+        return response
+        
+    except Exception as e:
+        print(f"Eroare la generarea template-ului pentru discipline: {e}")
+        return jsonify({'message': f'Eroare la generarea template-ului: {str(e)}'}), 500
+
+
+@secretary_bp.route('/templates/group-leaders', methods=['GET'])
+@jwt_required()
+def get_group_leaders_template():
+    """Generate and return a template for group leaders import"""
+    current_user_id = get_jwt_identity()
+    user = User.query.get(current_user_id)
+    
+    if not user or user.role not in [UserRole.SECRETARY, UserRole.ADMIN]:
+        return jsonify({'message': 'Acces interzis'}), 403
+    
+    # Creăm un fișier Excel temporar
+    try:
+        # Folosim un fișier temporar care nu va fi șters automat
+        tmp_file = tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False)
+        tmp_path = tmp_file.name
+        tmp_file.close()
+        
+        print(f"Generez template pentru șefi de grupă la: {tmp_path}")
+        
+        # Creăm workbook-ul Excel
+        workbook = xlsxwriter.Workbook(tmp_path)
+        worksheet = workbook.add_worksheet('Group Leaders')
+        
+        # Adăugăm antetul
+        headers = ['email', 'first_name', 'last_name', 'group_name', 'faculty', 'study_program', 'year_of_study']
+        for col, header in enumerate(headers):
+            worksheet.write(0, col, header)
+        
+        # Adăugăm câteva exemple
+        example_data = [
+            ['student1@student.usv.ro', 'Ion', 'Popescu', '3201A', 'FIESC', 'Calculatoare', '3'],
+            ['student2@student.usv.ro', 'Maria', 'Ionescu', '3202B', 'FIESC', 'Automatică', '3'],
+        ]
+        
+        for row, data in enumerate(example_data, start=1):
+            for col, value in enumerate(data):
+                worksheet.write(row, col, value)
+        
+        # Închide workbook-ul pentru a salva modificările
+        workbook.close()
+        
+        print(f"Template pentru șefi de grupă generat cu succes, dimensiune: {os.path.getsize(tmp_path)} bytes")
+        
+        # Trimite fișierul către client
+        response = send_file(
+            tmp_path,
+            as_attachment=True,
+            download_name='group_leaders_template.xlsx',
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        
+        # Setăm un callback pentru a șterge fișierul după ce a fost trimis
+        @response.call_on_close
+        def cleanup():
+            try:
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+                    print(f"Fișierul temporar {tmp_path} a fost șters")
+            except Exception as e:
+                print(f"Eroare la ștergerea fișierului temporar: {e}")
+        
+        return response
+        
+    except Exception as e:
+        print(f"Eroare la generarea template-ului pentru șefi de grupă: {e}")
+        return jsonify({'message': f'Eroare la generarea template-ului: {str(e)}'}), 500

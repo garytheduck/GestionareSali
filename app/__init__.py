@@ -22,18 +22,18 @@ def create_app(config_name='development'):
     migrate.init_app(app, db)
     jwt.init_app(app)
     
-    # Configurăm CORS în două moduri pentru a asigura compatibilitatea
-    # 1. Folosim extensia flask_cors
-    CORS(app, resources={
-        r"/*": {
-            "origins": "*",
-            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-            "allow_headers": ["Content-Type", "Authorization"]
-        }
-    })
-    
-    # 2. Configurăm middleware-ul nostru personalizat pentru CORS
+    # Configurăm CORS - folosim doar o singură metodă pentru a evita duplicate
+    # 1. Folosim doar middleware-ul nostru personalizat pentru CORS
     setup_cors_middleware(app)
+    
+    # NOTĂ: Am comentat configurarea flask_cors pentru a evita duplicate
+    # CORS(app, resources={
+    #     r"/*": {
+    #         "origins": "*",
+    #         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    #         "allow_headers": ["Content-Type", "Authorization"]
+    #     }
+    # })
     
     mail.init_app(app)
     
@@ -43,12 +43,20 @@ def create_app(config_name='development'):
     from app.routes.secretary import secretary_bp
     from app.routes.admin import admin_bp
     from app.routes.teacher import teacher_bp
+    from app.routes.course_management import course_bp
+    from app.routes.group_leader_management import group_leader_bp
+    from app.routes.exam_management import exam_bp
+    from app.routes.exam_registration import registration_bp
     
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(student_bp, url_prefix='/api/student')
     app.register_blueprint(secretary_bp, url_prefix='/api/secretary')
     app.register_blueprint(admin_bp, url_prefix='/api/admin')
     app.register_blueprint(teacher_bp, url_prefix='/api/teacher')
+    app.register_blueprint(course_bp)
+    app.register_blueprint(group_leader_bp)
+    app.register_blueprint(exam_bp)
+    app.register_blueprint(registration_bp)
     
     # Add root route for API documentation or welcome page
     @app.route('/')
@@ -101,6 +109,21 @@ def create_app(config_name='development'):
                     <p>Endpoint-uri pentru administratori:</p>
                     <pre>/api/admin/users - Gestionare utilizatori (GET, POST)
 /api/admin/settings - Setări instituționale (GET, PUT)</pre>
+                </div>
+                
+                <div class="endpoint">
+                    <h3>/api/courses</h3>
+                    <p>Endpoint-uri pentru gestionarea disciplinelor:</p>
+                    <pre>/api/courses - Listare discipline (GET)
+/api/courses/sync - Sincronizare discipline cu Orar (POST)</pre>
+                </div>
+                
+                <div class="endpoint">
+                    <h3>/api/group-leaders</h3>
+                    <p>Endpoint-uri pentru gestionarea șefilor de grupă:</p>
+                    <pre>/api/group-leaders - Listare șefi de grupă (GET)
+/api/group-leaders/upload - Încărcare listă șefi de grupă (POST)
+/api/group-leaders/template - Descărcare template (GET)</pre>
                 </div>
                 
                 <p>Pentru a utiliza API-ul, este necesară autentificarea și obținerea unui token JWT.</p>
