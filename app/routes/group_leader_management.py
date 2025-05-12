@@ -240,7 +240,8 @@ def upload_group_leaders():
                         last_name=row['last_name'].strip(),
                         email=email,
                         role='student',
-                        is_active=True
+                        is_active=True,
+                        group_name=row['group_name'].strip()  # Setăm grupa pentru utilizator
                     )
                     db.session.add(user)
                     db.session.flush()  # Pentru a obține ID-ul utilizatorului
@@ -279,6 +280,9 @@ def upload_group_leaders():
                     group_leader.is_active = True
                     group_leader.updated_at = datetime.utcnow()
                     results['updated'] += 1
+                    
+                # Actualizăm și câmpul group_name din tabela User
+                user.group_name = row['group_name'].strip()
                     
             except Exception as e:
                 logger.error(f"Error processing row {index + 2}: {str(e)}")

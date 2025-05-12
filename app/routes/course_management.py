@@ -1,14 +1,18 @@
 """
 API endpoints pentru managementul disciplinelor
 """
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify, current_app, send_file
 from app import db
 from app.models import Course, ExamType, User
+from app.models.group_leader import GroupLeader
 from app.utils.orar_client import OrarClient
 from werkzeug.exceptions import BadRequest, NotFound
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy.exc import SQLAlchemyError
 from datetime import datetime
+from app.utils.email_service import send_exam_proposal_notification, send_exam_approval_notification, send_exam_rejection_notification
+from app.utils.exam_overlap_checker import check_room_overlap, check_teacher_overlap, check_assistant_overlap, check_student_group_overlap
+import io
 import logging
 
 logger = logging.getLogger(__name__)
@@ -387,8 +391,12 @@ def propose_exam_date(course_id):
         # Salvăm modificările în baza de date
         db.session.commit()
         
-        # Vom implementa notificarea pe email în alt sprint
-        # TODO: Trimite email către profesor
+        # Trimitem notificare prin email către profesor
+        try:
+            send_exam_proposal_notification(course)
+        except Exception as email_error:
+            logger.error(f"Error sending email notification: {str(email_error)}")
+            # Continuăm execuția chiar dacă trimiterea emailului eșuează
         
         return jsonify({
             'status': 'success',
@@ -510,8 +518,15 @@ def review_exam_proposal(course_id):
         # Salvăm modificările în baza de date
         db.session.commit()
         
-        # Vom implementa notificarea pe email în alt sprint
-        # TODO: Trimite email către șeful de grupă
+        # Trimitem notificare prin email
+        try:
+            if action == 'approve':
+                send_exam_approval_notification(course)
+            elif action == 'reject':
+                send_exam_rejection_notification(course)
+        except Exception as email_error:
+            logger.error(f"Error sending email notification: {str(email_error)}")
+            # Continuăm execuția chiar dacă trimiterea emailului eșuează
         
         return jsonify({
             'status': 'success',

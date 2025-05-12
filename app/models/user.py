@@ -24,6 +24,7 @@ class User(db.Model):
     
     # Additional fields based on role
     academic_title = db.Column(db.String(100), nullable=True)  # For professors/secretaries
+    group_name = db.Column(db.String(50), nullable=True)  # For students - grupa de studiu
     
     # Google authentication fields
     google_id = db.Column(db.String(255), nullable=True, unique=True)
@@ -34,7 +35,7 @@ class User(db.Model):
     reservations = db.relationship('Reservation', foreign_keys='Reservation.user_id', backref='user', lazy='dynamic')
     
     def __init__(self, email, first_name, last_name, role, password=None, academic_title=None, 
-                 google_id=None, profile_picture=None, auth_provider='local'):
+                 google_id=None, profile_picture=None, auth_provider='local', group_name=None):
         self.email = email
         self.first_name = first_name
         self.last_name = last_name
@@ -43,6 +44,7 @@ class User(db.Model):
         self.google_id = google_id
         self.profile_picture = profile_picture
         self.auth_provider = auth_provider
+        self.group_name = group_name
         if password:
             self.set_password(password)
     
@@ -67,6 +69,7 @@ class User(db.Model):
             'full_name': self.full_name,
             'role': self.role.value,
             'academic_title': self.academic_title,
+            'group_name': self.group_name,
             'is_active': self.is_active,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'profile_picture': self.profile_picture,
