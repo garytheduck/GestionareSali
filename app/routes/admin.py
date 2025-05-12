@@ -20,8 +20,9 @@ def get_settings():
     current_user_id = get_jwt_identity()
     user = User.query.get(current_user_id)
     
-    if not user or user.role != UserRole.ADMIN:
-        return jsonify({'message': 'Acces interzis'}), 403
+    # Allow both ADMIN and SECRETARY roles to access this endpoint
+    if not user or (user.role != UserRole.ADMIN and user.role != UserRole.SECRETARY):
+        return jsonify({'message': 'Acces interzis. Trebuie să aveți rol de ADMIN sau SECRETARY.'}), 403
     
     settings = InstitutionSettings.get_settings()
     
@@ -36,8 +37,9 @@ def update_settings():
     current_user_id = get_jwt_identity()
     user = User.query.get(current_user_id)
     
-    if not user or user.role != UserRole.ADMIN:
-        return jsonify({'message': 'Acces interzis'}), 403
+    # Allow both ADMIN and SECRETARY roles to access this endpoint
+    if not user or (user.role != UserRole.ADMIN and user.role != UserRole.SECRETARY):
+        return jsonify({'message': 'Acces interzis. Trebuie să aveți rol de ADMIN sau SECRETARY.'}), 403
     
     data = request.get_json()
     settings = InstitutionSettings.get_settings()
@@ -90,8 +92,9 @@ def get_users():
     current_user_id = get_jwt_identity()
     user = User.query.get(current_user_id)
     
-    if not user or user.role != UserRole.ADMIN:
-        return jsonify({'message': 'Acces interzis'}), 403
+    # Allow both ADMIN and SECRETARY roles to access this endpoint
+    if not user or (user.role != UserRole.ADMIN and user.role != UserRole.SECRETARY):
+        return jsonify({'message': 'Acces interzis. Trebuie să aveți rol de ADMIN sau SECRETARY.'}), 403
     
     # Get query parameters
     role = request.args.get('role')
@@ -217,8 +220,9 @@ def create_room():
     current_user_id = get_jwt_identity()
     user = User.query.get(current_user_id)
     
-    if not user or user.role != UserRole.ADMIN:
-        return jsonify({'message': 'Acces interzis'}), 403
+    # Allow both ADMIN and SECRETARY roles to access this endpoint
+    if not user or (user.role != UserRole.ADMIN and user.role != UserRole.SECRETARY):
+        return jsonify({'message': 'Acces interzis. Trebuie să aveți rol de ADMIN sau SECRETARY.'}), 403
     
     data = request.get_json()
     
@@ -257,8 +261,9 @@ def update_room(room_id):
     current_user_id = get_jwt_identity()
     user = User.query.get(current_user_id)
     
-    if not user or user.role != UserRole.ADMIN:
-        return jsonify({'message': 'Acces interzis'}), 403
+    # Allow both ADMIN and SECRETARY roles to access this endpoint
+    if not user or (user.role != UserRole.ADMIN and user.role != UserRole.SECRETARY):
+        return jsonify({'message': 'Acces interzis. Trebuie să aveți rol de ADMIN sau SECRETARY.'}), 403
     
     room = Room.query.get(room_id)
     
@@ -307,8 +312,9 @@ def import_schedule():
     current_user_id = get_jwt_identity()
     user = User.query.get(current_user_id)
     
-    if not user or user.role != UserRole.ADMIN:
-        return jsonify({'message': 'Acces interzis'}), 403
+    # Allow both ADMIN and SECRETARY roles to access this endpoint
+    if not user or (user.role != UserRole.ADMIN and user.role != UserRole.SECRETARY):
+        return jsonify({'message': 'Acces interzis. Trebuie să aveți rol de ADMIN sau SECRETARY.'}), 403
     
     # Check if file is in request
     if 'file' not in request.files:
@@ -350,26 +356,55 @@ def import_schedule_from_usv():
     current_user_id = get_jwt_identity()
     user = User.query.get(current_user_id)
     
-    if not user or user.role != UserRole.ADMIN:
-        return jsonify({'message': 'Acces interzis'}), 403
+    # Allow both ADMIN and SECRETARY roles to access this endpoint
+    if not user or (user.role != UserRole.ADMIN and user.role != UserRole.SECRETARY):
+        return jsonify({'message': 'Acces interzis. Trebuie să aveți rol de ADMIN sau SECRETARY.'}), 403
     
     data = request.get_json()
     
-    # Get semester parameter
+    # Get parameters
     semester = data.get('semester')
-    if not semester:
-        return jsonify({'message': 'Parametrul semester este obligatoriu'}), 400
+    rooms_only = data.get('rooms_only', False)
+    source = data.get('source', 'default')
+    
+    # If rooms_only is True, we don't need a semester
+    if not rooms_only and not semester:
+        return jsonify({'message': 'Parametrul semester este obligatoriu pentru importul orarului complet'}), 400
     
     try:
-        # Process the USV API data and import schedule
-        result = import_schedule_from_usv_api(semester)
-        
-        return jsonify({
-            'message': 'Orarul a fost importat cu succes din API-ul USV',
-            'stats': result
-        }), 200
+        # Import only rooms if requested
+        if rooms_only:
+            from app.utils.usv_api_client import import_rooms_from_usv
+            
+            # Verifică dacă trebuie să forțăm recrearea sălilor
+            force_recreate = data.get('force_recreate', True)
+            
+            # Use orar.usv.ro API if specified
+            if source == 'orar.usv.ro':
+                print(f"Importing rooms from orar.usv.ro API with force_recreate={force_recreate}")
+                # Import rooms from orar.usv.ro
+                result = import_rooms_from_usv(force_recreate=force_recreate)
+                return jsonify({
+                    'message': 'Lista de săli a fost importată cu succes din API-ul orar.usv.ro',
+                    'stats': result
+                }), 200
+            else:
+                # Use default API
+                result = import_rooms_from_usv(force_recreate=force_recreate)
+                return jsonify({
+                    'message': 'Lista de săli a fost importată cu succes',
+                    'stats': result
+                }), 200
+        else:
+            # Process the USV API data and import schedule
+            result = import_schedule_from_usv_api(semester)
+            
+            return jsonify({
+                'message': 'Orarul a fost importat cu succes din API-ul USV',
+                'stats': result
+            }), 200
     except Exception as e:
-        return jsonify({'message': f'Eroare la importul orarului din API-ul USV: {str(e)}'}), 400
+        return jsonify({'message': f'Eroare la importul din API-ul USV: {str(e)}'}), 400
 
 @admin_bp.route('/reset-semester', methods=['POST'])
 @jwt_required()
@@ -378,8 +413,9 @@ def reset_semester():
     current_user_id = get_jwt_identity()
     user = User.query.get(current_user_id)
     
-    if not user or user.role != UserRole.ADMIN:
-        return jsonify({'message': 'Acces interzis'}), 403
+    # Allow both ADMIN and SECRETARY roles to access this endpoint
+    if not user or (user.role != UserRole.ADMIN and user.role != UserRole.SECRETARY):
+        return jsonify({'message': 'Acces interzis. Trebuie să aveți rol de ADMIN sau SECRETARY.'}), 403
     
     data = request.get_json()
     

@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from app.models.user import User, UserRole
 from app.models.reservation import Reservation, ReservationStatus
 from app.models.room import Room
+from app.models.group_leader import GroupLeader
 from app import db
 from app.utils.email_service import send_approval_notification, send_rejection_notification
 from app.utils.report_generator import generate_reservations_report
@@ -14,6 +15,49 @@ import pandas as pd
 import xlsxwriter
 
 secretary_bp = Blueprint('secretary', __name__)
+
+@secretary_bp.route('/rooms', methods=['GET'])
+@jwt_required()
+def get_rooms():
+    """Get all rooms available for reservations"""
+    current_user_id = get_jwt_identity()
+    user = User.query.get(current_user_id)
+    
+    if not user or user.role not in [UserRole.SECRETARY, UserRole.ADMIN]:
+        return jsonify({'message': 'Acces interzis'}), 403
+    
+    # Get query parameters for filtering
+    building = request.args.get('building')
+    room_type = request.args.get('room_type')
+    min_capacity = request.args.get('min_capacity', type=int)
+    
+    # Build query
+    query = Room.query.filter(Room.is_active == True)
+    
+    # Apply filters
+    if building:
+        query = query.filter(Room.building == building)
+    
+    if room_type:
+        query = query.filter(Room.room_type == room_type)
+    
+    if min_capacity:
+        query = query.filter(Room.capacity >= min_capacity)
+    
+    # Order by building and name
+    query = query.order_by(Room.building, Room.name)
+    
+    rooms = query.all()
+    
+    # Debug log pentru a vedea ce date sunt trimise către frontend
+    room_data = [room.to_dict() for room in rooms]
+    print(f"Sending {len(room_data)} rooms to frontend")
+    for i, room in enumerate(room_data[:5]):  # Afișăm primele 5 săli pentru depanare
+        print(f"Room {i+1}: {room}")
+    
+    return jsonify({
+        'rooms': room_data
+    }), 200
 
 @secretary_bp.route('/reservations/pending', methods=['GET'])
 @jwt_required()
@@ -461,6 +505,58 @@ def import_disciplines():
     except Exception as e:
         return jsonify({'message': f'Eroare la procesarea fișierului: {str(e)}'}), 500
 
+
+@secretary_bp.route('/group-leaders', methods=['GET'])
+@jwt_required()
+def get_group_leaders():
+    """Get all group leaders with optional filtering"""
+    current_user_id = get_jwt_identity()
+    user = User.query.get(current_user_id)
+    
+    if not user or user.role not in [UserRole.SECRETARY, UserRole.ADMIN]:
+        return jsonify({'message': 'Acces interzis'}), 403
+    
+    # Get query parameters for filtering
+    faculty = request.args.get('faculty')
+    study_program = request.args.get('study_program')
+    year_of_study = request.args.get('year_of_study')
+    group_name = request.args.get('group_name')
+    current_semester = request.args.get('current_semester')
+    academic_year = request.args.get('academic_year')
+    
+    # Build query
+    query = GroupLeader.query
+    
+    # Apply filters
+    if faculty:
+        query = query.filter(GroupLeader.faculty == faculty)
+    
+    if study_program:
+        query = query.filter(GroupLeader.study_program == study_program)
+    
+    if year_of_study:
+        query = query.filter(GroupLeader.year_of_study == year_of_study)
+    
+    if group_name:
+        query = query.filter(GroupLeader.group_name == group_name)
+    
+    if current_semester:
+        query = query.filter(GroupLeader.current_semester == current_semester)
+    
+    if academic_year:
+        query = query.filter(GroupLeader.academic_year == academic_year)
+    
+    # Order by faculty, study program, and year
+    query = query.order_by(GroupLeader.faculty, GroupLeader.study_program, GroupLeader.year_of_study)
+    
+    group_leaders = query.all()
+    
+    # Debug log
+    print(f"Returning {len(group_leaders)} group leaders")
+    
+    return jsonify({
+        'group_leaders': [gl.to_dict() for gl in group_leaders]
+    }), 200
 
 @secretary_bp.route('/group-leaders/upload', methods=['POST'])
 @jwt_required()

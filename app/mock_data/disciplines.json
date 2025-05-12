@@ -1,0 +1,92 @@
+[
+  {
+    "id": 1,
+    "code": "C101",
+    "name": "Programare în C++",
+    "faculty": "FIESC",
+    "department": "Calculatoare",
+    "study_program": "Calculatoare",
+    "year_of_study": 1,
+    "semester": "1",
+    "credits": 5,
+    "group_name": "3111A",
+    "exam_type": "exam",
+    "teacher": {
+      "id": 1,
+      "name": "Prof. Dr. Ion Popescu",
+      "email": "ion.popescu@usm.ro"
+    }
+  },
+  {
+    "id": 2,
+    "code": "C102",
+    "name": "Structuri de date și algoritmi",
+    "faculty": "FIESC",
+    "department": "Calculatoare",
+    "study_program": "Calculatoare",
+    "year_of_study": 1,
+    "semester": "1",
+    "credits": 6,
+    "group_name": "3111A",
+    "exam_type": "exam",
+    "teacher": {
+      "id": 2,
+      "name": "Conf. Dr. Maria Ionescu",
+      "email": "maria.ionescu@usm.ro"
+    }
+  },
+  {
+    "id": 3,
+    "code": "C201",
+    "name": "Programare web",
+    "faculty": "FIESC",
+    "department": "Calculatoare",
+    "study_program": "Calculatoare",
+    "year_of_study": 2,
+    "semester": "1",
+    "credits": 5,
+    "group_name": "3211A",
+    "exam_type": "colloquium",
+    "teacher": {
+      "id": 3,
+      "name": "Șef lucr. Dr. Alexandru Munteanu",
+      "email": "alexandru.munteanu@usm.ro"
+    }
+  },
+  {
+    "id": 4,
+    "code": "I201",
+    "name": "Sisteme de operare",
+    "faculty": "FIESC",
+    "department": "Automatică",
+    "study_program": "Automatică și Informatică Aplicată",
+    "year_of_study": 2,
+    "semester": "1",
+    "credits": 4,
+    "group_name": "3121A",
+    "exam_type": "exam",
+    "teacher": {
+      "id": 4,
+      "name": "Prof. Dr. Ioana Petrescu",
+      "email": "ioana.petrescu@usm.ro"
+    }
+  },
+  {
+    "id": 5,
+    "code": "C301",
+    "name": "Inteligență artificială",
+    "faculty": "FIESC",
+    "department": "Calculatoare",
+    "study_program": "Calculatoare",
+    "year_of_study": 3,
+    "semester": "1",
+    "credits": 5,
+    "group_name": "3311A",
+    "exam_type": "project",
+    "teacher": {
+      "id": 5,
+      "name": "Prof. Dr. Vasile Popovici",
+      "email": "vasile.popovici@usm.ro"
+    }
+  }
+]

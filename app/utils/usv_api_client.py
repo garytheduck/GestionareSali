@@ -76,9 +76,12 @@ class USVApiClient:
         return time(hour=hours, minute=minutes)
 
 
-def import_rooms_from_usv():
+def import_rooms_from_usv(force_recreate=True):
     """
     Import rooms from USV API and update the database
+    
+    Args:
+        force_recreate (bool): If True, delete all existing rooms and recreate them
     
     Returns:
         dict: Statistics about the import process
@@ -88,13 +91,65 @@ def import_rooms_from_usv():
         'created': 0,
         'updated': 0,
         'errors': 0,
-        'error_details': []
+        'error_details': [],
+        'rooms_imported': 0,
+        'rooms_updated': 0,
+        'rooms_deleted': 0
     }
     
     try:
+        # Dacă force_recreate este True, ștergem toate sălile existente
+        if force_recreate:
+            try:
+                # Salvăm sălile predefinite (id < 4) pentru a le păstra
+                predefined_rooms = Room.query.filter(Room.id < 4).all()
+                predefined_data = [{
+                    'id': room.id,
+                    'name': room.name,
+                    'capacity': room.capacity,
+                    'building': room.building,
+                    'floor': room.floor,
+                    'room_type': room.room_type,
+                    'features': room.features,
+                    'usv_id': room.usv_id,
+                    'description': room.description,
+                    'is_active': room.is_active
+                } for room in predefined_rooms]
+                
+                # Ștergem toate sălile
+                deleted_count = Room.query.delete()
+                stats['rooms_deleted'] = deleted_count
+                db.session.commit()
+                
+                # Recreăm sălile predefinite
+                for room_data in predefined_data:
+                    room = Room(
+                        id=room_data['id'],
+                        name=room_data['name'],
+                        capacity=room_data['capacity'],
+                        building=room_data['building'],
+                        floor=room_data['floor'],
+                        room_type=room_data['room_type'],
+                        features=room_data['features'],
+                        usv_id=room_data['usv_id'],
+                        description=room_data['description'],
+                        is_active=room_data['is_active']
+                    )
+                    db.session.add(room)
+                db.session.commit()
+                
+                print(f"Deleted {deleted_count} rooms and recreated {len(predefined_data)} predefined rooms")
+            except Exception as e:
+                print(f"Error deleting rooms: {str(e)}")
+                db.session.rollback()
+                stats['errors'] += 1
+                stats['error_details'].append(f"Error deleting rooms: {str(e)}")
+        
+        # Obținem datele de la API-ul USV
         rooms_data = USVApiClient.get_sali()
         stats['total'] = len(rooms_data)
         
+        # Procesăm fiecare sală
         for room_data in rooms_data:
             try:
                 room_id = room_data.get('id')
@@ -102,45 +157,190 @@ def import_rooms_from_usv():
                 building = room_data.get('building', '')
                 long_name = room_data.get('longName', '')
                 
-                # Try to find existing room by USV ID or name
+                # Extrage informații suplimentare din numele și descrierea sălii
+                floor, room_type, capacity, extracted_building = extract_room_info(room_name, long_name)
+                
+                # Încearcă să găsești sala după USV ID sau nume
                 room = Room.query.filter_by(usv_id=room_id).first()
                 if not room:
                     room = Room.query.filter_by(name=room_name).first()
                 
                 if room:
-                    # Update existing room
+                    # Actualizează sala existentă
                     room.name = room_name
-                    room.building = building
+                    room.building = extracted_building if extracted_building else (building if building else 'USV')
+                    room.floor = floor if floor is not None else 0
+                    room.room_type = room_type if room_type else 'Sală de curs'
+                    room.capacity = capacity if capacity and capacity > 0 else 30
                     room.usv_id = room_id
                     room.description = long_name
+                    
                     stats['updated'] += 1
+                    stats['rooms_updated'] += 1
                 else:
-                    # Create new room with default values for required fields
+                    # Creează o sală nouă cu valorile extrase
                     room = Room(
                         name=room_name,
-                        capacity=30,  # Default value
-                        building=building,
-                        floor=0,  # Default value
-                        room_type='Unknown',  # Default value
+                        capacity=capacity if capacity and capacity > 0 else 30,
+                        building=extracted_building if extracted_building else (building if building else 'USV'),
+                        floor=floor if floor is not None else 0,
+                        room_type=room_type if room_type else 'Sală de curs',
                         features=None
                     )
                     room.usv_id = room_id
                     room.description = long_name
                     db.session.add(room)
                     stats['created'] += 1
+                    stats['rooms_imported'] += 1
                 
             except Exception as e:
                 stats['errors'] += 1
                 stats['error_details'].append(f"Error processing room {room_data.get('id')}: {str(e)}")
         
         db.session.commit()
+        print(f"Import completed: {stats['created']} created, {stats['updated']} updated, {stats['errors']} errors")
     
     except Exception as e:
         stats['errors'] += 1
         stats['error_details'].append(f"Error fetching rooms data: {str(e)}")
         db.session.rollback()
+        print(f"Import failed: {str(e)}")
     
     return stats
+
+
+def extract_room_info(room_name, long_name):
+    """
+    Extrage informații despre sală din numele și descrierea acesteia.
+    
+    Args:
+        room_name (str): Numele scurt al sălii (ex: 'C201', 'L004')
+        long_name (str): Descrierea detaliată a sălii
+        
+    Returns:
+        tuple: (floor, room_type, capacity, building)
+    """
+    floor = None
+    room_type = None
+    capacity = None
+    building = None
+    
+    # Determină clădirea în funcție de prima literă a numelui sălii
+    if room_name and len(room_name) > 0:
+        first_letter = room_name[0].upper()
+        if first_letter == 'A':
+            building = 'Corp A'
+        elif first_letter == 'B':
+            building = 'Corp B'
+        elif first_letter == 'C':
+            building = 'Corp C'
+        elif first_letter == 'D':
+            building = 'Corp D'
+        elif first_letter == 'E':
+            building = 'Corp E'
+        elif first_letter == 'H':
+            building = 'Corp H'
+        elif first_letter == 'J':
+            building = 'Corp J'
+        elif first_letter == 'K':
+            building = 'Corp K'
+        elif first_letter == 'L':
+            building = 'Laborator'
+        elif first_letter == 'S':
+            building = 'Sala Sport'
+        else:
+            # Verifică dacă numele sălii conține informații despre clădire
+            if 'Aula' in room_name:
+                building = 'Aula'
+            elif 'Bazin' in room_name:
+                building = 'Bazin înot'
+            elif 'Stadion' in room_name:
+                building = 'Stadion'
+            elif 'Amf' in room_name:
+                building = 'Amfiteatru'
+            else:
+                building = 'USV'
+    
+    # Extrage etajul din numele sălii (ex: C201 -> etajul 2)
+    if len(room_name) >= 2:
+        # Încearcă să extragă etajul din a doua cifră a numelui
+        try:
+            if room_name[1].isdigit():
+                floor = int(room_name[1])
+            # Sau din prima cifră după prima literă
+            elif len(room_name) >= 3 and room_name[2].isdigit():
+                floor = int(room_name[2])
+            # Sau din prima cifră din nume
+            else:
+                import re
+                floor_match = re.search(r'\d', room_name)
+                if floor_match:
+                    floor = int(floor_match.group(0))
+        except (ValueError, IndexError):
+            pass
+    
+    # Extrage tipul sălii din prima literă a numelui sau din descriere
+    if room_name and len(room_name) > 0:
+        first_letter = room_name[0].upper()
+        
+        # Verifică dacă numele sălii conține o literă urmată de cifre (ex: A123, B201, C301)
+        import re
+        lab_pattern = re.match(r'^([A-Z])\d+', room_name)
+        
+        # Sălile cu litere A, B, C, D, E, H urmate de cifre sunt laboratoare
+        if lab_pattern and first_letter in ['A', 'B', 'C', 'D', 'E', 'H']:
+            room_type = 'Laborator'
+        # Alte reguli specifice pentru tipuri de săli
+        elif first_letter == 'L':
+            room_type = 'Laborator'
+        elif first_letter == 'S':
+            room_type = 'Sală de seminar'
+        elif first_letter == 'A' and not lab_pattern:
+            room_type = 'Amfiteatru'
+        elif first_letter == 'B' and not lab_pattern:
+            room_type = 'Bibliotecă'
+        else:
+            # Verifică în descriere sau nume pentru indicii despre tipul sălii
+            if 'Lab' in room_name or 'Lab' in long_name:
+                room_type = 'Laborator'
+            elif 'Amf' in room_name or 'Amfiteatru' in long_name:
+                room_type = 'Amfiteatru'
+            elif 'Curs' in room_name or 'Curs' in long_name:
+                room_type = 'Sală de curs'
+            elif 'Seminar' in room_name or 'Seminar' in long_name:
+                room_type = 'Sală de seminar'
+            elif 'Birou' in room_name or 'Birou' in long_name:
+                room_type = 'Birou'
+            else:
+                room_type = 'Altele'
+    
+    # Încearcă să extragă capacitatea din descrierea detaliată
+    if long_name:
+        # Caută un număr în descriere care ar putea reprezenta capacitatea
+        import re
+        capacity_matches = re.findall(r'\b(\d+)\s*(locuri|persoane|studenti|capacity)\b', long_name, re.IGNORECASE)
+        if capacity_matches:
+            try:
+                capacity = int(capacity_matches[0][0])
+            except (ValueError, IndexError):
+                pass
+    
+    # Dacă nu am găsit capacitatea, estimăm în funcție de tipul sălii
+    if not capacity and room_type:
+        if room_type == 'Amfiteatru':
+            capacity = 100
+        elif room_type == 'Sală de curs':
+            capacity = 50
+        elif room_type == 'Laborator':
+            capacity = 30
+        elif room_type == 'Sală de seminar':
+            capacity = 25
+        elif room_type == 'Birou':
+            capacity = 5
+        else:
+            capacity = 20
+    
+    return floor, room_type, capacity, building
 
 
 def import_schedule_from_usv(semester):
