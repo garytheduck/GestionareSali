@@ -402,16 +402,61 @@ def import_disciplines():
             }), 400
         
         # Procesăm datele și le salvăm în baza de date
-        # Aici ar trebui să adăugați logica specifică pentru salvarea disciplinelor
-        # De exemplu, crearea de obiecte Course și salvarea lor în baza de date
+        from app.models.course import Course, ExamType
+        inserted = 0
+        errors = []
+        for idx, row in df.iterrows():
+            try:
+                # Verifică dacă există deja disciplina după cod sau nume+facultate+an+sem
+                code = str(row.get('code') or f"{row['discipline_name']}-{row['faculty']}-{row['study_program']}-{row['year_of_study']}-{row['semester']}")
+                existing = Course.query.filter_by(code=code).first()
+                if existing:
+                    errors.append(f"Linia {idx+2}: Disciplina deja există (code={code})")
+                    continue
+                # Asigură-te că group_name are o valoare implicită dacă nu există în Excel
+                group_name = row.get('group_name')
+                if not group_name or pd.isna(group_name):
+                    # Generează un nume de grup implicit bazat pe program și an
+                    group_name = f"{row['study_program'][:3]}{row['year_of_study']}"
+                
+                course = Course(
+                    code=code,
+                    name=row['discipline_name'],
+                    faculty=row['faculty'],
+                    study_program=row['study_program'],
+                    year_of_study=int(row['year_of_study']),
+                    semester=str(row['semester']),
+                    credits=int(row['credits']) if 'credits' in row and pd.notnull(row['credits']) else None,
+                    group_name=group_name,
+                    exam_type=ExamType.EXAM,  # Valoare implicită
+                    department=row.get('department') if row.get('department') and not pd.isna(row.get('department')) else None
+                )
+                db.session.add(course)
+                inserted += 1
+            except Exception as e:
+                errors.append(f"Linia {idx+2}: {str(e)}")
+        db.session.commit()
         
-        # Pentru acest exemplu, doar simulăm procesarea
-        num_disciplines = len(df)
+        # Notifică frontend-ul că datele au fost actualizate
+        # Putem returna datele actualizate direct pentru a fi afișate imediat
+        from app.routes.course_management import get_courses_data
+        updated_courses = get_courses_data()
         
-        return jsonify({
-            'message': f'Au fost importate cu succes {num_disciplines} discipline',
-            'count': num_disciplines
-        }), 200
+        # Redirectăm către pagina de discipline pentru a forța reîncărcarea datelor
+        # Trimitem și un semnal către frontend pentru a reîmprospăta lista
+        response = jsonify({
+            'status': 'success',
+            'message': f'Au fost importate cu succes {inserted} discipline',
+            'count': inserted,
+            'errors': errors,
+            'data': updated_courses,
+            'refresh': True  # Semnal pentru frontend să reîmprospăteze datele
+        })
+        
+        # Adăugăm un header special pentru a indica că datele trebuie reîmprospătate
+        response.headers['X-Refresh-Data'] = 'true'
+        
+        return response, 200
         
     except Exception as e:
         return jsonify({'message': f'Eroare la procesarea fișierului: {str(e)}'}), 500
@@ -421,6 +466,9 @@ def import_disciplines():
 @jwt_required()
 def upload_group_leaders():
     """Upload group leaders from an Excel file"""
+    from app.models.user import User, UserRole
+    from app.models.group_leader import GroupLeader
+    
     current_user_id = get_jwt_identity()
     user = User.query.get(current_user_id)
     
@@ -462,16 +510,90 @@ def upload_group_leaders():
             }), 400
         
         # Procesăm datele și le salvăm în baza de date
-        # Aici ar trebui să adăugați logica specifică pentru salvarea șefilor de grupă
-        # De exemplu, crearea de obiecte GroupLeader și salvarea lor în baza de date
+        inserted = 0
+        errors = []
+        for idx, row in df.iterrows():
+            try:
+                try:
+                    # Verifică dacă toate câmpurile obligatorii există
+                    required_fields = ['email', 'group_name', 'faculty', 'study_program', 'year_of_study']
+                    missing = [f for f in required_fields if f not in row or pd.isna(row[f])]
+                    if missing:
+                        errors.append(f"Linia {idx+2}: Lipsesc câmpuri obligatorii: {', '.join(missing)}")
+                        continue
+                        
+                    # Caută user după email sau creează dacă nu există
+                    email = str(row['email']).strip()
+                    if not email or '@' not in email:
+                        errors.append(f"Linia {idx+2}: Email invalid: {email}")
+                        continue
+                        
+                    user = User.query.filter_by(email=email).first()
+                    if not user:
+                        # Creează un utilizator nou
+                        first_name = str(row.get('first_name', '')).strip() or 'Student'
+                        last_name = str(row.get('last_name', '')).strip() or 'Nou'
+                        user = User(
+                            email=email,
+                            first_name=first_name,
+                            last_name=last_name,
+                            role=UserRole.STUDENT
+                        )
+                        db.session.add(user)
+                        db.session.flush()  # pentru a obține user.id
+                        
+                    # Verifică dacă există deja GroupLeader pentru grupă și user
+                    group_name = str(row['group_name']).strip()
+                    existing = GroupLeader.query.filter_by(user_id=user.id, group_name=group_name).first()
+                    if existing:
+                        errors.append(f"Linia {idx+2}: Șeful de grupă deja există ({email}, {group_name})")
+                        continue
+                        
+                    # Pregătește valorile pentru câmpuri
+                    faculty = str(row['faculty']).strip()
+                    study_program = str(row['study_program']).strip()
+                    year_of_study = int(row['year_of_study'])
+                    current_semester = str(row.get('semester', '')).strip() or '1'
+                    academic_year = str(row.get('academic_year', '')).strip() or '2024-2025'
+                    
+                    group_leader = GroupLeader(
+                        user_id=user.id,
+                        group_name=group_name,
+                        faculty=faculty,
+                        study_program=study_program,
+                        year_of_study=year_of_study,
+                        current_semester=current_semester,
+                        academic_year=academic_year
+                    )
+                except Exception as e:
+                    errors.append(f"Linia {idx+2}: Eroare la procesare: {str(e)}")
+                    continue
+                db.session.add(group_leader)
+                inserted += 1
+            except Exception as e:
+                errors.append(f"Linia {idx+2}: {str(e)}")
+        db.session.commit()
         
-        # Pentru acest exemplu, doar simulăm procesarea
-        num_group_leaders = len(df)
+        # Notifică frontend-ul că datele au fost actualizate
+        # Putem returna datele actualizate direct pentru a fi afișate imediat
+        from app.routes.group_leader_management import get_group_leaders_data
+        updated_group_leaders = get_group_leaders_data()
         
-        return jsonify({
-            'message': f'Au fost importați cu succes {num_group_leaders} șefi de grupă',
-            'count': num_group_leaders
-        }), 200
+        # Redirectăm către pagina de șefi de grupă pentru a forța reîncărcarea datelor
+        # Trimitem și un semnal către frontend pentru a reîmprospăta lista
+        response = jsonify({
+            'status': 'success',
+            'message': f'Au fost importați cu succes {inserted} șefi de grupă',
+            'count': inserted,
+            'errors': errors,
+            'data': updated_group_leaders,
+            'refresh': True  # Semnal pentru frontend să reîmprospăteze datele
+        })
+        
+        # Adăugăm un header special pentru a indica că datele trebuie reîmprospătate
+        response.headers['X-Refresh-Data'] = 'true'
+        
+        return response, 200
         
     except Exception as e:
         return jsonify({'message': f'Eroare la procesarea fișierului: {str(e)}'}), 500
@@ -569,14 +691,14 @@ def get_group_leaders_template():
         worksheet = workbook.add_worksheet('Group Leaders')
         
         # Adăugăm antetul
-        headers = ['email', 'first_name', 'last_name', 'group_name', 'faculty', 'study_program', 'year_of_study']
+        headers = ['email', 'first_name', 'last_name', 'group_name', 'faculty', 'study_program', 'year_of_study', 'semester']
         for col, header in enumerate(headers):
             worksheet.write(0, col, header)
         
         # Adăugăm câteva exemple
         example_data = [
-            ['student1@student.usv.ro', 'Ion', 'Popescu', '3201A', 'FIESC', 'Calculatoare', '3'],
-            ['student2@student.usv.ro', 'Maria', 'Ionescu', '3202B', 'FIESC', 'Automatică', '3'],
+            ['student1@student.usv.ro', 'Ion', 'Popescu', '3201A', 'FIESC', 'Calculatoare', '3', '1'],
+            ['student2@student.usv.ro', 'Maria', 'Ionescu', '3202B', 'FIESC', 'Automatică', '3', '2'],
         ]
         
         for row, data in enumerate(example_data, start=1):

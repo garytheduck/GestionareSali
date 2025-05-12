@@ -19,48 +19,36 @@ course_bp = Blueprint('course', __name__, url_prefix='/api/courses')
 # Inițializăm clientul pentru sistemul Orar
 orar_client = OrarClient()
 
-@course_bp.route('/', methods=['GET'])
-@jwt_required()
-def get_courses():
+def get_courses_data(filters=None):
     """
-    Obține lista disciplinelor cu opțiuni de filtrare
+    Funcție utilitară pentru a obține datele cursurilor cu filtre opționale.
+    Poate fi importată și folosită de alte module.
     
-    Query params:
-        faculty (str): Filtrare după facultate
-        department (str): Filtrare după departament
-        study_program (str): Filtrare după program de studiu
-        year_of_study (int): Filtrare după an de studiu
-        semester (str): Filtrare după semestru
-        group_name (str): Filtrare după grupă
-        exam_type (str): Filtrare după tip examen (exam, colloquium, project)
+    Args:
+        filters (dict): Filtre opționale (faculty, department, etc.)
+        
+    Returns:
+        list: Lista de cursuri serializate
     """
     try:
-        # Preluăm parametrii din query string
-        faculty = request.args.get('faculty')
-        department = request.args.get('department')
-        study_program = request.args.get('study_program')
-        year_of_study = request.args.get('year_of_study')
-        semester = request.args.get('semester')
-        group_name = request.args.get('group_name')
-        exam_type = request.args.get('exam_type')
-        
         # Construim query-ul
         query = Course.query
         
-        if faculty:
-            query = query.filter(Course.faculty == faculty)
-        if department:
-            query = query.filter(Course.department == department)
-        if study_program:
-            query = query.filter(Course.study_program == study_program)
-        if year_of_study:
-            query = query.filter(Course.year_of_study == int(year_of_study))
-        if semester:
-            query = query.filter(Course.semester == semester)
-        if group_name:
-            query = query.filter(Course.group_name == group_name)
-        if exam_type:
-            query = query.filter(Course.exam_type == ExamType(exam_type))
+        if filters:
+            if 'faculty' in filters and filters['faculty']:
+                query = query.filter(Course.faculty == filters['faculty'])
+            if 'department' in filters and filters['department']:
+                query = query.filter(Course.department == filters['department'])
+            if 'study_program' in filters and filters['study_program']:
+                query = query.filter(Course.study_program == filters['study_program'])
+            if 'year_of_study' in filters and filters['year_of_study']:
+                query = query.filter(Course.year_of_study == int(filters['year_of_study']))
+            if 'semester' in filters and filters['semester']:
+                query = query.filter(Course.semester == filters['semester'])
+            if 'group_name' in filters and filters['group_name']:
+                query = query.filter(Course.group_name == filters['group_name'])
+            if 'exam_type' in filters and filters['exam_type']:
+                query = query.filter(Course.exam_type == ExamType(filters['exam_type']))
         
         # Executăm query-ul
         courses = query.all()
@@ -100,8 +88,51 @@ def get_courses():
                 'exam_duration': course.exam_duration
             })
         
+        return result
+    except Exception as e:
+        logger.error(f"Error in get_courses_data: {str(e)}")
+        return []
+
+@course_bp.route('/', methods=['GET'])
+@jwt_required()
+def get_courses():
+    """
+    Obține lista disciplinelor cu opțiuni de filtrare
+    
+    Query params:
+        faculty (str): Filtrare după facultate
+        department (str): Filtrare după departament
+        study_program (str): Filtrare după program de studiu
+        year_of_study (int): Filtrare după an de studiu
+        semester (str): Filtrare după semestru
+        group_name (str): Filtrare după grupă
+        exam_type (str): Filtrare după tip examen (exam, colloquium, project)
+    """
+    try:
+        # Preluăm parametrii din query string pentru filtrare
+        filters = {
+            'faculty': request.args.get('faculty'),
+            'department': request.args.get('department'),
+            'study_program': request.args.get('study_program'),
+            'year_of_study': request.args.get('year_of_study'),
+            'semester': request.args.get('semester'),
+            'group_name': request.args.get('group_name'),
+            'exam_type': request.args.get('exam_type')
+        }
+        
+        # Folosim funcția utilitară pentru a obține datele
+        result = get_courses_data(filters)
+        
+        # Asigurăm formatul corect pentru frontend
+        # Verificăm dacă există date și trimitem un mesaj corespunzător
+        if not result:
+            message = "Nu există discipline încă. Încărcați un fișier sau sincronizați cu Orar."
+        else:
+            message = f"Au fost găsite {len(result)} discipline."
+            
         return jsonify({
             'status': 'success',
+            'message': message,
             'data': result,
             'count': len(result)
         }), 200

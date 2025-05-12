@@ -25,44 +25,34 @@ group_leader_bp = Blueprint('group_leader', __name__, url_prefix='/api/group-lea
 # Pattern pentru validarea adreselor de email
 STUDENT_EMAIL_PATTERN = r'^[a-zA-Z0-9._%+-]+@student\.usv\.ro$'
 
-@group_leader_bp.route('/', methods=['GET'])
-@jwt_required()
-def get_group_leaders():
+def get_group_leaders_data(filters=None):
     """
-    Obține lista șefilor de grupă cu opțiuni de filtrare
+    Funcție utilitară pentru a obține datele șefilor de grupă cu filtre opționale.
+    Poate fi importată și folosită de alte module.
     
-    Query params:
-        faculty (str): Filtrare după facultate
-        study_program (str): Filtrare după program de studiu
-        year_of_study (int): Filtrare după an de studiu
-        group_name (str): Filtrare după grupă
-        current_semester (str): Filtrare după semestrul curent
-        academic_year (str): Filtrare după anul academic
+    Args:
+        filters (dict): Filtre opționale (faculty, study_program, etc.)
+        
+    Returns:
+        list: Lista de șefi de grupă serializată
     """
     try:
-        # Preluăm parametrii din query string
-        faculty = request.args.get('faculty')
-        study_program = request.args.get('study_program')
-        year_of_study = request.args.get('year_of_study')
-        group_name = request.args.get('group_name')
-        current_semester = request.args.get('current_semester')
-        academic_year = request.args.get('academic_year')
-        
         # Construim query-ul
         query = GroupLeader.query.join(User)
         
-        if faculty:
-            query = query.filter(GroupLeader.faculty == faculty)
-        if study_program:
-            query = query.filter(GroupLeader.study_program == study_program)
-        if year_of_study:
-            query = query.filter(GroupLeader.year_of_study == int(year_of_study))
-        if group_name:
-            query = query.filter(GroupLeader.group_name == group_name)
-        if current_semester:
-            query = query.filter(GroupLeader.current_semester == current_semester)
-        if academic_year:
-            query = query.filter(GroupLeader.academic_year == academic_year)
+        if filters:
+            if 'faculty' in filters and filters['faculty']:
+                query = query.filter(GroupLeader.faculty == filters['faculty'])
+            if 'study_program' in filters and filters['study_program']:
+                query = query.filter(GroupLeader.study_program == filters['study_program'])
+            if 'year_of_study' in filters and filters['year_of_study']:
+                query = query.filter(GroupLeader.year_of_study == int(filters['year_of_study']))
+            if 'group_name' in filters and filters['group_name']:
+                query = query.filter(GroupLeader.group_name == filters['group_name'])
+            if 'current_semester' in filters and filters['current_semester']:
+                query = query.filter(GroupLeader.current_semester == filters['current_semester'])
+            if 'academic_year' in filters and filters['academic_year']:
+                query = query.filter(GroupLeader.academic_year == filters['academic_year'])
         
         # Includem doar șefii de grupă activi
         query = query.filter(GroupLeader.is_active == True)
@@ -91,8 +81,49 @@ def get_group_leaders():
                 'updated_at': gl.updated_at.isoformat() if gl.updated_at else None
             })
         
+        return result
+    except Exception as e:
+        logger.error(f"Error in get_group_leaders_data: {str(e)}")
+        return []
+
+@group_leader_bp.route('/', methods=['GET'])
+@jwt_required()
+def get_group_leaders():
+    """
+    Obține lista șefilor de grupă cu opțiuni de filtrare
+    
+    Query params:
+        faculty (str): Filtrare după facultate
+        study_program (str): Filtrare după program de studiu
+        year_of_study (int): Filtrare după an de studiu
+        group_name (str): Filtrare după grupă
+        current_semester (str): Filtrare după semestrul curent
+        academic_year (str): Filtrare după anul academic
+    """
+    try:
+        # Preluăm parametrii din query string pentru filtrare
+        filters = {
+            'faculty': request.args.get('faculty'),
+            'study_program': request.args.get('study_program'),
+            'year_of_study': request.args.get('year_of_study'),
+            'group_name': request.args.get('group_name'),
+            'current_semester': request.args.get('current_semester'),
+            'academic_year': request.args.get('academic_year')
+        }
+        
+        # Folosim funcția utilitară pentru a obține datele
+        result = get_group_leaders_data(filters)
+        
+        # Asigurăm formatul corect pentru frontend
+        # Verificăm dacă există date și trimitem un mesaj corespunzător
+        if not result:
+            message = "Nu există șefi de grupă încă. Încărcați un fișier pentru a adăuga."
+        else:
+            message = f"Au fost găsiți {len(result)} șefi de grupă."
+            
         return jsonify({
             'status': 'success',
+            'message': message,
             'data': result,
             'count': len(result)
         }), 200
