@@ -6,6 +6,43 @@ Aplicație backend pentru gestionarea programării examenelor și rezervării s�
 
 Acest proiect reprezintă partea de backend pentru o aplicație de gestionare a rezervărilor sălilor de examen din cadrul unei universități. Sistemul permite studenților să verifice disponibilitatea sălilor și să trimită cereri de rezervare, secretariatului să aprobe sau să respingă cererile, iar administratorilor să gestioneze orarul și configurația sistemului.
 
+---
+
+## Ghid rapid: Rulare completă cu Docker Compose
+
+Acest proiect este complet containerizat (backend, frontend și baza de date).
+
+### Cerințe preliminare
+- Docker și Docker Compose instalate pe mașina locală
+
+### Pași pentru rulare
+1. Clonează acest repository:
+   ```sh
+   git clone <adresa-ta-repo>
+   ```
+2. Din directorul `GestionareSali`, pornește toate serviciile cu:
+   ```sh
+   docker-compose up --build
+   ```
+3. Accesează aplicația:
+   - Frontend (React): [http://localhost:3000](http://localhost:3000)
+   - Backend (Flask API): [http://localhost:5000](http://localhost:5000)
+
+### Ce se întâmplă?
+- Backend-ul, frontend-ul și baza de date PostgreSQL pornesc în containere separate.
+- Datele bazei de date sunt persistate într-un volum Docker.
+- Frontend-ul este configurat să comunice direct cu backend-ul prin rețeaua Docker.
+
+### Note pentru colaboratori
+- **Nu este nevoie să instalezi manual Node.js, Python sau PostgreSQL.**
+- Dacă ai nevoie de variabile de mediu suplimentare (ex: pentru email, OAuth etc.), consultă documentația proiectului sau cere-le de la administrator.
+- Pentru oprirea serviciilor:
+   ```sh
+   docker-compose down
+   ```
+
+---
+
 ## Tehnologii utilizate
 
 - Python 3.9+
