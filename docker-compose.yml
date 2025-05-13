@@ -33,6 +33,20 @@ services:
     networks:
       - app-network
 
+  frontend:
+    build:
+      context: ../frontendtwaaos
+      args:
+        - REACT_APP_API_URL=http://app:5000
+    container_name: react_frontend
+    restart: always
+    ports:
+      - "3000:3000"
+    networks:
+      - app-network
+    depends_on:
+      - app
+
 networks:
   app-network:
     driver: bridge
