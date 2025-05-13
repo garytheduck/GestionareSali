@@ -23,3 +23,6 @@ flask-marshmallow==0.15.0
 marshmallow-sqlalchemy==0.29.0
 PyJWT==2.6.0
 requests==2.28.2
+google-auth==2.29.0
+google-auth-oauthlib==1.2.0
+xlsxwriter==3.2.0
