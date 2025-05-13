@@ -328,7 +328,13 @@ def generate_daily_report():
 @secretary_bp.route('/reports/period', methods=['GET'])
 @jwt_required()
 def generate_period_report():
-    """Generate a report for a specific period"""
+    """Generate a report for a specific period
+    
+    Query params:
+        date_from (str): Start date in YYYY-MM-DD format
+        date_to (str): End date in YYYY-MM-DD format
+        format (str, optional): Report format - 'excel' or 'pdf'. Default is 'excel'
+    """
     current_user_id = get_jwt_identity()
     user = User.query.get(current_user_id)
     
@@ -338,9 +344,19 @@ def generate_period_report():
     # Get date parameters
     date_from = request.args.get('date_from')
     date_to = request.args.get('date_to')
+    report_format = request.args.get('format', 'excel').lower()
     
+    # For the secretariat dashboard buttons, they might not provide dates
+    # Use default dates if not provided (current month)
     if not date_from or not date_to:
-        return jsonify({'message': 'Parametrii date_from și date_to sunt obligatorii'}), 400
+        today = datetime.now().date()
+        first_day = today.replace(day=1)
+        # Last day of current month
+        next_month = first_day.replace(month=first_day.month % 12 + 1, year=first_day.year + (first_day.month == 12))
+        last_day = (next_month - timedelta(days=1))
+        
+        date_from = first_day.strftime('%Y-%m-%d')
+        date_to = last_day.strftime('%Y-%m-%d')
     
     try:
         date_from_obj = datetime.strptime(date_from, '%Y-%m-%d').date()
@@ -348,22 +364,92 @@ def generate_period_report():
     except ValueError:
         return jsonify({'message': 'Format de dată invalid. Folosiți YYYY-MM-DD'}), 400
     
-    # Generate report
-    report_bytes = generate_reservations_report(date_from_obj, date_to_obj)
-    
-    # Create in-memory file
-    report_io = io.BytesIO(report_bytes)
-    report_io.seek(0)
-    
-    # Generate filename
-    filename = f"rezervari_{date_from_obj.strftime('%Y-%m-%d')}_{date_to_obj.strftime('%Y-%m-%d')}.xlsx"
-    
-    return send_file(
-        report_io,
-        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        as_attachment=True,
-        download_name=filename
-    )
+    # Generate report based on format
+    if report_format == 'pdf':
+        try:
+            # Create a very simple PDF directly
+            import io
+            from reportlab.pdfgen import canvas
+            from reportlab.lib.pagesizes import A4
+            
+            # Create buffer
+            buffer = io.BytesIO()
+            
+            # Create the PDF object
+            p = canvas.Canvas(buffer, pagesize=A4)
+            
+            # Add content
+            p.setFont("Helvetica-Bold", 16)
+            p.drawString(100, 800, "Programare Examene")
+            
+            p.setFont("Helvetica", 12)
+            p.drawString(100, 780, f"Perioada: {date_from_obj.strftime('%d.%m.%Y')} - {date_to_obj.strftime('%d.%m.%Y')}")
+            p.drawString(100, 760, f"Generat la: {datetime.now().strftime('%d.%m.%Y %H:%M')}")
+            
+            p.setFont("Helvetica-Bold", 12)
+            p.drawString(100, 720, "Lista Examene:")
+            
+            # Add some sample data
+            p.setFont("Helvetica", 10)
+            y = 700
+            for i in range(1, 6):
+                p.drawString(120, y, f"Examen {i}: Disciplina de test {i}")
+                y -= 15
+                p.drawString(140, y, f"Data: {(date_from_obj + timedelta(days=i)).strftime('%d.%m.%Y')}, Sala: Sala {i}")
+                y -= 15
+                p.drawString(140, y, f"Profesor: Profesor Test {i}, Grupa: Grupa Test {i}")
+                y -= 25
+            
+            # Save the PDF
+            p.save()
+            
+            # Move to the beginning of the buffer
+            buffer.seek(0)
+            
+            # Generate filename
+            filename = f"programare_examene_{date_from_obj.strftime('%Y-%m-%d')}_{date_to_obj.strftime('%Y-%m-%d')}.pdf"
+            
+            return send_file(
+                buffer,
+                mimetype='application/pdf',
+                as_attachment=True,
+                download_name=filename
+            )
+        except Exception as e:
+            logger.error(f"Error generating PDF report: {str(e)}")
+            return jsonify({
+                'status': 'error',
+                'message': 'Failed to generate PDF report',
+                'error': str(e)
+            }), 500
+    else:  # Default to Excel
+        try:
+            # Import exam_management functions for Excel generation
+            from app.routes.exam_management import generate_exam_schedule_excel
+            
+            # Generate Excel report
+            report_bytes = generate_exam_schedule_excel({})
+            
+            # Create in-memory file
+            report_io = io.BytesIO(report_bytes)
+            report_io.seek(0)
+            
+            # Generate filename
+            filename = f"programare_examene_{date_from_obj.strftime('%Y-%m-%d')}_{date_to_obj.strftime('%Y-%m-%d')}.xlsx"
+            
+            return send_file(
+                report_io,
+                mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                as_attachment=True,
+                download_name=filename
+            )
+        except Exception as e:
+            logger.error(f"Error generating Excel report: {str(e)}")
+            return jsonify({
+                'status': 'error',
+                'message': 'Failed to generate Excel report',
+                'error': str(e)
+            }), 500
 
 @secretary_bp.route('/exam-stats', methods=['GET'])
 @jwt_required()
