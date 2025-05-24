@@ -326,7 +326,6 @@ def generate_daily_report():
     )
 
 @secretary_bp.route('/reports/period', methods=['GET'])
-@jwt_required()
 def generate_period_report():
     """Generate a report for a specific period
     
@@ -335,126 +334,224 @@ def generate_period_report():
         date_to (str): End date in YYYY-MM-DD format
         format (str, optional): Report format - 'excel' or 'pdf'. Default is 'excel'
     """
-    current_user_id = get_jwt_identity()
-    user = User.query.get(current_user_id)
+    # Importăm logger dacă nu există
+    import logging
+    logger = logging.getLogger(__name__)
     
-    if not user or user.role not in [UserRole.SECRETARY, UserRole.ADMIN]:
-        return jsonify({'message': 'Acces interzis'}), 403
+    # Verificăm dacă avem un token în parametrii de query (pentru abordarea window.open)
+    token = request.args.get('token')
     
-    # Get date parameters
-    date_from = request.args.get('date_from')
-    date_to = request.args.get('date_to')
-    report_format = request.args.get('format', 'excel').lower()
-    
-    # For the secretariat dashboard buttons, they might not provide dates
-    # Use default dates if not provided (current month)
-    if not date_from or not date_to:
-        today = datetime.now().date()
-        first_day = today.replace(day=1)
-        # Last day of current month
-        next_month = first_day.replace(month=first_day.month % 12 + 1, year=first_day.year + (first_day.month == 12))
-        last_day = (next_month - timedelta(days=1))
-        
-        date_from = first_day.strftime('%Y-%m-%d')
-        date_to = last_day.strftime('%Y-%m-%d')
+    # Configurăm răspunsul CORS implicit
+    def create_cors_response(response):
+        response.headers['Access-Control-Allow-Origin'] = 'http://localhost:3000'
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization'
+        return response
     
     try:
-        date_from_obj = datetime.strptime(date_from, '%Y-%m-%d').date()
-        date_to_obj = datetime.strptime(date_to, '%Y-%m-%d').date()
-    except ValueError:
-        return jsonify({'message': 'Format de dată invalid. Folosiți YYYY-MM-DD'}), 400
-    
-    # Generate report based on format
-    if report_format == 'pdf':
+        # Verificăm autentificarea - fie prin JWT, fie prin token în query
+        current_user_id = None
+        
+        if token:
+            # Decodificăm token-ul manual
+            try:
+                from flask_jwt_extended import decode_token
+                decoded = decode_token(token)
+                current_user_id = decoded.get('sub')
+            except Exception as e:
+                logger.error(f"Error decoding token: {str(e)}")
+                response = jsonify({'message': 'Token invalid sau expirat'})
+                response.status_code = 401
+                return create_cors_response(response)
+        else:
+            # Folosim JWT standard
+            try:
+                from flask_jwt_extended import get_jwt_identity
+                current_user_id = get_jwt_identity()
+            except Exception as e:
+                logger.error(f"JWT error: {str(e)}")
+                response = jsonify({'message': 'Autentificare necesară'})
+                response.status_code = 401
+                return create_cors_response(response)
+        
+        # Verificăm utilizatorul
+        user = User.query.get(current_user_id)
+        
+        if not user or user.role not in [UserRole.SECRETARY, UserRole.ADMIN]:
+            response = jsonify({'message': 'Acces interzis'})
+            response.status_code = 403
+            return create_cors_response(response)
+        
+        # Get date parameters
+        date_from = request.args.get('date_from')
+        date_to = request.args.get('date_to')
+        report_format = request.args.get('format', 'excel').lower()
+        
+        # For the secretariat dashboard buttons, they might not provide dates
+        # Use default dates if not provided (current month)
+        if not date_from or not date_to:
+            today = datetime.now().date()
+            first_day = today.replace(day=1)
+            # Last day of current month
+            next_month = first_day.replace(month=first_day.month % 12 + 1, year=first_day.year + (first_day.month == 12))
+            last_day = (next_month - timedelta(days=1))
+            
+            date_from = first_day.strftime('%Y-%m-%d')
+            date_to = last_day.strftime('%Y-%m-%d')
+        
         try:
-            # Create a very simple PDF directly
-            import io
-            from reportlab.pdfgen import canvas
-            from reportlab.lib.pagesizes import A4
-            
-            # Create buffer
-            buffer = io.BytesIO()
-            
-            # Create the PDF object
-            p = canvas.Canvas(buffer, pagesize=A4)
-            
-            # Add content
-            p.setFont("Helvetica-Bold", 16)
-            p.drawString(100, 800, "Programare Examene")
-            
-            p.setFont("Helvetica", 12)
-            p.drawString(100, 780, f"Perioada: {date_from_obj.strftime('%d.%m.%Y')} - {date_to_obj.strftime('%d.%m.%Y')}")
-            p.drawString(100, 760, f"Generat la: {datetime.now().strftime('%d.%m.%Y %H:%M')}")
-            
-            p.setFont("Helvetica-Bold", 12)
-            p.drawString(100, 720, "Lista Examene:")
-            
-            # Add some sample data
-            p.setFont("Helvetica", 10)
-            y = 700
-            for i in range(1, 6):
-                p.drawString(120, y, f"Examen {i}: Disciplina de test {i}")
-                y -= 15
-                p.drawString(140, y, f"Data: {(date_from_obj + timedelta(days=i)).strftime('%d.%m.%Y')}, Sala: Sala {i}")
-                y -= 15
-                p.drawString(140, y, f"Profesor: Profesor Test {i}, Grupa: Grupa Test {i}")
-                y -= 25
-            
-            # Save the PDF
-            p.save()
-            
-            # Move to the beginning of the buffer
-            buffer.seek(0)
-            
-            # Generate filename
-            filename = f"programare_examene_{date_from_obj.strftime('%Y-%m-%d')}_{date_to_obj.strftime('%Y-%m-%d')}.pdf"
-            
-            return send_file(
-                buffer,
-                mimetype='application/pdf',
-                as_attachment=True,
-                download_name=filename
-            )
-        except Exception as e:
-            logger.error(f"Error generating PDF report: {str(e)}")
-            return jsonify({
-                'status': 'error',
-                'message': 'Failed to generate PDF report',
-                'error': str(e)
-            }), 500
-    else:  # Default to Excel
-        try:
-            # Import exam_management functions for Excel generation
-            from app.routes.exam_management import generate_exam_schedule_excel
-            
-            # Generate Excel report
-            report_bytes = generate_exam_schedule_excel({})
-            
-            # Create in-memory file
-            report_io = io.BytesIO(report_bytes)
-            report_io.seek(0)
-            
-            # Generate filename
-            filename = f"programare_examene_{date_from_obj.strftime('%Y-%m-%d')}_{date_to_obj.strftime('%Y-%m-%d')}.xlsx"
-            
-            return send_file(
-                report_io,
-                mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                as_attachment=True,
-                download_name=filename
-            )
-        except Exception as e:
-            logger.error(f"Error generating Excel report: {str(e)}")
-            return jsonify({
-                'status': 'error',
-                'message': 'Failed to generate Excel report',
-                'error': str(e)
-            }), 500
-
-@secretary_bp.route('/exam-stats', methods=['GET'])
-@jwt_required()
-def get_exam_stats():
-    """Get statistics about exams (total, completed, incomplete)"""
+            date_from_obj = datetime.strptime(date_from, '%Y-%m-%d').date()
+            date_to_obj = datetime.strptime(date_to, '%Y-%m-%d').date()
+        except ValueError:
+            response = jsonify({'message': 'Format de dată invalid. Folosiți YYYY-MM-DD'})
+            response.status_code = 400
+            return create_cors_response(response)
+        
+        # Generate report based on format
+        if report_format == 'pdf':
+            try:
+                # Create a very simple PDF directly
+                import io
+                # Verificăm dacă reportlab este instalat
+                try:
+                    from reportlab.pdfgen import canvas
+                    from reportlab.lib.pagesizes import A4
+                except ImportError:
+                    # Dacă reportlab nu este instalat, returnăm o eroare
+                    response = jsonify({
+                        'status': 'error',
+                        'message': 'Pachetul reportlab nu este instalat. Contactați administratorul.',
+                        'error': 'Lipsește dependența reportlab pentru generarea PDF-urilor.'
+                    })
+                    response.status_code = 500
+                    return create_cors_response(response)
+                
+                # Create buffer
+                buffer = io.BytesIO()
+                
+                # Create the PDF object
+                p = canvas.Canvas(buffer, pagesize=A4)
+                
+                # Add content
+                p.setFont("Helvetica-Bold", 16)
+                p.drawString(100, 800, "Programare Examene")
+                
+                p.setFont("Helvetica", 12)
+                p.drawString(100, 780, f"Perioada: {date_from_obj.strftime('%d.%m.%Y')} - {date_to_obj.strftime('%d.%m.%Y')}")
+                p.drawString(100, 760, f"Generat la: {datetime.now().strftime('%d.%m.%Y %H:%M')}")
+                
+                p.setFont("Helvetica-Bold", 12)
+                p.drawString(100, 720, "Lista Examene:")
+                
+                # Add some sample data
+                p.setFont("Helvetica", 10)
+                y = 700
+                for i in range(1, 6):
+                    p.drawString(120, y, f"Examen {i}: Disciplina de test {i}")
+                    y -= 15
+                    p.drawString(140, y, f"Data: {(date_from_obj + timedelta(days=i)).strftime('%d.%m.%Y')}, Sala: Sala {i}")
+                    y -= 15
+                    p.drawString(140, y, f"Profesor: Profesor Test {i}, Grupa: Grupa Test {i}")
+                    y -= 25
+                
+                # Save the PDF
+                p.save()
+                
+                # Move to the beginning of the buffer
+                buffer.seek(0)
+                
+                # Generate filename
+                filename = f"programare_examene_{date_from_obj.strftime('%Y-%m-%d')}_{date_to_obj.strftime('%Y-%m-%d')}.pdf"
+                
+                # Folosim make_response pentru a putea adăuga manual headerele CORS dacă e necesar
+                from flask import make_response
+                response = make_response(send_file(
+                    buffer,
+                    mimetype='application/pdf',
+                    as_attachment=True,
+                    download_name=filename
+                ))
+                
+                # Adăugăm explicit headerele CORS pentru a ne asigura că sunt prezente
+                return create_cors_response(response)
+                
+            except Exception as e:
+                logger.error(f"Error generating PDF report: {str(e)}")
+                response = jsonify({
+                    'status': 'error',
+                    'message': 'Failed to generate PDF report',
+                    'error': str(e)
+                })
+                response.status_code = 500
+                return create_cors_response(response)
+        else:  # Default to Excel
+            try:
+                # Import io și alte module necesare
+                import io
+                
+                # Import exam_management functions for Excel generation
+                try:
+                    from app.routes.exam_management import generate_exam_schedule_excel
+                    
+                    # Generate Excel report
+                    report_bytes = generate_exam_schedule_excel({})
+                    
+                    # Create in-memory file
+                    report_io = io.BytesIO(report_bytes)
+                    report_io.seek(0)
+                except ImportError as e:
+                    response = jsonify({
+                        'status': 'error',
+                        'message': 'Eroare la importul modulului pentru generarea Excel',
+                        'error': str(e)
+                    })
+                    response.status_code = 500
+                    return create_cors_response(response)
+                except Exception as e:
+                    response = jsonify({
+                        'status': 'error',
+                        'message': 'Eroare la generarea raportului Excel',
+                        'error': str(e)
+                    })
+                    response.status_code = 500
+                    return create_cors_response(response)
+                
+                # Generate filename
+                filename = f"programare_examene_{date_from_obj.strftime('%Y-%m-%d')}_{date_to_obj.strftime('%Y-%m-%d')}.xlsx"
+                
+                # Folosim make_response pentru a putea adăuga manual headerele CORS dacă e necesar
+                from flask import make_response
+                response = make_response(send_file(
+                    report_io,
+                    mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    as_attachment=True,
+                    download_name=filename
+                ))
+                
+                # Adăugăm explicit headerele CORS pentru a ne asigura că sunt prezente
+                return create_cors_response(response)
+                
+            except Exception as e:
+                logger.error(f"Error generating Excel report: {str(e)}")
+                response = jsonify({
+                    'status': 'error',
+                    'message': 'Failed to generate Excel report',
+                    'error': str(e)
+                })
+                response.status_code = 500
+                return create_cors_response(response)
+    except Exception as e:
+        # Capturăm orice excepție neașteptată și returnăm un răspuns cu headerele CORS
+        logger.error(f"Unexpected error in generate_period_report: {str(e)}")
+        response = jsonify({
+            'status': 'error',
+            'message': 'An unexpected error occurred',
+            'error': str(e)
+        })
+        response.status_code = 500
+        
+        # Adăugăm explicit headerele CORS pentru a ne asigura că sunt prezente
+        return create_cors_response(response)
     current_user_id = get_jwt_identity()
     user = User.query.get(current_user_id)
     
