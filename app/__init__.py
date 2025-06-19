@@ -47,6 +47,8 @@ def create_app(config_name='development'):
     from app.routes.group_leader_management import group_leader_bp
     from app.routes.exam_management import exam_bp
     from app.routes.exam_registration import registration_bp
+    from app.routes.external_api import external_api_bp
+    from app.routes.teacher_management import teacher_management_bp
     
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(student_bp, url_prefix='/api/student')
@@ -57,6 +59,8 @@ def create_app(config_name='development'):
     app.register_blueprint(group_leader_bp)
     app.register_blueprint(exam_bp)
     app.register_blueprint(registration_bp)
+    app.register_blueprint(external_api_bp, url_prefix='/api/external')
+    app.register_blueprint(teacher_management_bp)
     
     # Add root route for API documentation or welcome page
     @app.route('/')
